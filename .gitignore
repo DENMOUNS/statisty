@@ -1,0 +1,40 @@
+/.idea/
+/.vscode/
+.phpunit.result.cache
+.phpunit.cache/
+.php_cs.cache
+.php-cs-fixer.cache
+.pint.cache
+.env
+.env.*
+.env.testing
+/.env.local
+/.vagrant/
+/.sass-cache/
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+/.DS_Store
+Thumbs.db
+
+# Composer
+/vendor/
+/composer.phar
+/composer.lock
+
+# Laravel
+/storage/
+/bootstrap/cache/
+/public/storage
+
+# Build / coverage / logs
+/build/
+/dist/
+/coverage/
+*.log
+*.sql
+*.sqlite
+
+# OS files
+Icon?
