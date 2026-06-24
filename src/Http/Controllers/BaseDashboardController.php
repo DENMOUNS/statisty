@@ -43,6 +43,7 @@ abstract class BaseDashboardController extends Controller
                 ['key' => 'health', 'label' => 'Health', 'url' => url($prefix . '/health')],
                 ['key' => 'logs', 'label' => 'Logs', 'url' => url($prefix . '/logs')],
                 ['key' => 'jobs', 'label' => 'Jobs', 'url' => url($prefix . '/jobs')],
+                ['key' => 'docs', 'label' => 'API Docs', 'url' => url($prefix . '/docs')],
             ],
             'sidebarWorkflows' => array_map(
                 fn (string $model): array => [

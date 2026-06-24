@@ -121,5 +121,68 @@ final class StatistyServiceProvider extends ServiceProvider
                 \Statisty\Console\Commands\StatistyDoctorCommand::class,
             ]);
         }
+
+        // Listen to SQL Queries to track slow queries
+        if (config('statisty.features.slow_queries.enabled', true)) {
+            try {
+                $db = $this->app->make('db');
+                $db->listen(function (\Illuminate\Database\Events\QueryExecuted $query) {
+                    $threshold = (float) config('statisty.features.slow_queries.threshold_ms', 100);
+                    if ($query->time >= $threshold) {
+                        $sql = $query->sql;
+                        if (str_contains($sql, 'statisty_slow_queries')) {
+                            return;
+                        }
+
+                        // Trace where it comes from in user application code
+                        $caller = 'Unknown';
+                        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
+                        foreach ($trace as $step) {
+                            if (isset($step['file']) && !str_contains($step['file'], 'vendor\\') && !str_contains($step['file'], 'vendor/')) {
+                                $caller = basename($step['file']) . ':' . $step['line'];
+                                break;
+                            }
+                        }
+
+                        $filePath = storage_path('logs/statisty_slow_queries.json');
+                        $slowQueries = [];
+                        if (file_exists($filePath)) {
+                            try {
+                                $content = file_get_contents($filePath);
+                                $slowQueries = $content ? json_decode($content, true) ?: [] : [];
+                            } catch (\Throwable $e) {}
+                        }
+
+                        $bindings = [];
+                        foreach ($query->bindings as $binding) {
+                            if ($binding instanceof \DateTimeInterface) {
+                                $bindings[] = $binding->format('Y-m-d H:i:s');
+                            } elseif (is_object($binding)) {
+                                $bindings[] = get_class($binding);
+                            } else {
+                                $bindings[] = $binding;
+                            }
+                        }
+
+                        $slowQueries[] = [
+                            'sql' => $sql,
+                            'bindings' => $bindings,
+                            'time_ms' => round($query->time, 2),
+                            'caller' => $caller,
+                            'connection' => $query->connectionName,
+                            'created_at' => date('Y-m-d H:i:s'),
+                        ];
+
+                        if (count($slowQueries) > 100) {
+                            array_shift($slowQueries);
+                        }
+
+                        file_put_contents($filePath, json_encode($slowQueries, JSON_PRETTY_PRINT));
+                    }
+                });
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
     }
 }

@@ -1,251 +1,95 @@
-# Statisty
+# Statisty 📊
 
-## Francais
+> **Statisty** est un package Laravel conçu pour générer instantanément un tableau de bord analytique puissant, beau et dynamique pour votre application. Il inspecte automatiquement vos modèles Eloquent et génère des KPIs, des graphiques Highcharts interactifs et des DataTables avancées.
 
-Statisty est un package Laravel d'analytics et d'observabilite pour construire des dashboards a partir de modeles Eloquent.
+---
 
-### Installation
+## 🚀 Fonctionnalités Principales
 
+- **Zéro Configuration Requise :** Installez le package et accédez immédiatement à votre tableau de bord. Statisty découvre automatiquement vos modèles et leurs relations.
+- **Tableau de Bord Global :** Une vue d'ensemble avec l'état de santé de l'application, une Heatmap d'activité globale (façon GitHub) et vos métriques clés.
+- **Workflows par Modèle :** Des pages dédiées pour chaque modèle avec des graphiques d'évolution, de distribution, et une DataTable avec recherche globale et export (PDF/Excel/CSV).
+- **Détection Automatique des KPIs :** Calcule les totaux, les sommes et les moyennes en inspectant le typage de vos colonnes en base de données.
+- **Documentation API Automatique :** Génère une documentation de vos routes (hors vendor) en parsant vos contrôleurs, requêtes de formulaires (FormRequests), DTOs et annotations PHPDoc (`@bodyParam`).
+
+---
+
+## 📦 Installation
+
+1. Installez le package via Composer :
 ```bash
-composer require statisty/statisty
+composer require denmouns/statisty
 ```
 
-Publiez la configuration, les vues et les assets:
-
+2. Publiez les assets (CSS/JS) et le fichier de configuration :
 ```bash
 php artisan vendor:publish --tag=statisty-config
-php artisan vendor:publish --tag=statisty-views
 php artisan vendor:publish --tag=statisty-assets
 ```
 
-### Configuration
-
-Exposez les modeles que Statisty peut lire dans `config/statisty.php`:
-
-```php
-'models' => [
-    App\Models\User::class => [
-        'enabled' => true,
-        'columns' => ['id', 'name', 'email', 'created_at'],
-        'relations' => [],
-    ],
-],
+3. (Optionnel) Lancez la commande de découverte si vous souhaitez cacher le profil de vos modèles pour de meilleures performances :
+```bash
+php artisan statisty:discover
 ```
 
-Les routes API JSON et dashboard web sont separees et configurables:
+---
+
+## ⚙️ Configuration
+
+Le fichier de configuration sera publié dans `config/statisty.php`.
+Vous pouvez y activer ou désactiver l'API interne, configurer le routage, et cibler les modèles spécifiques à afficher.
+
+### URL d'accès
+Par défaut, le tableau de bord est accessible sur :
+```
+http://votre-app.test/web/statisty/dashboard
+```
+
+### Sécurité & Middlewares
+Dans `config/statisty.php`, vous pouvez protéger l'accès à Statisty en ajoutant des middlewares Laravel standards (ex: `auth`, `can:view-dashboard`) :
 
 ```php
 'routes' => [
-    'api' => [
-        'enabled' => true,
-        'prefix' => 'api/statisty',
-        'middleware' => [],
-    ],
     'web' => [
         'enabled' => true,
         'prefix' => 'web/statisty',
-        'middleware' => ['web'],
+        'middleware' => ['web', 'auth'], // <- Ajoutez 'auth' ici
     ],
-],
+    // ...
+]
 ```
 
-Routes par defaut:
+---
 
-```text
-GET /api/statisty/health
-GET /api/statisty/metrics/{model}
-GET /api/statisty/tables/{model}
-GET /api/statisty/charts/{model}
-GET /api/statisty/workspace/{name}
-GET /web/statisty/dashboard
-```
+## 🧑‍💻 Publication sur Packagist (Mise en ligne)
 
-### Utilisation
+Pour rendre ce package disponible à tous les développeurs via `composer require`, suivez ces étapes :
 
-```php
-use Statisty\Facades\Statisty;
+1. **Vérifier le `composer.json` :** Assurez-vous que le fichier `composer.json` à la racine de votre package est valide et contient un nom unique, ex : `"name": "votre-pseudo/statisty"`.
+2. **Initialiser Git & Pousser sur GitHub :**
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial release"
+   git branch -M main
+   git remote add origin https://github.com/votre-pseudo/statisty.git
+   git push -u origin main
+   ```
+3. **Créer une release (Tag) :** Sur GitHub, créez une *Release* ou taguez simplement votre commit : `git tag v1.0.0` puis `git push --tags`.
+4. **Soumettre à Packagist :** 
+   - Créez un compte sur [Packagist.org](https://packagist.org/)
+   - Cliquez sur **Submit** et collez l'URL de votre dépôt GitHub.
+   - Et voilà ! N'importe qui pourra faire `composer require votre-pseudo/statisty`.
 
-$dashboard = Statisty::workspace('business')
-    ->models([
-        App\Models\User::class,
-        App\Models\Order::class,
-    ])
-    ->pagination(500)
-    ->build();
+---
 
-return $dashboard->toArray();
-```
+## 💡 Idées d'évolutions futures
 
-Verifiez l'installation:
+- Export de rapports planifiés (PDF/Excel) par email via le Scheduler Laravel.
+- Créateur de requêtes personnalisées (Builder SQL visuel en Drag & Drop).
+- Détection d'anomalies de données avec alertes (ex: +300% d'inscriptions aujourd'hui).
+- Analyse de Cohorte intégrée pour les modèles liés aux utilisateurs/abonnements.
 
-```bash
-php artisan statisty:doctor
-```
+---
 
-## English
-
-Statisty is a Laravel analytics and observability package for building dashboards from Eloquent models.
-
-### Installation
-
-```bash
-composer require statisty/statisty
-```
-
-Publish the package configuration, views, and assets:
-
-```bash
-php artisan vendor:publish --tag=statisty-config
-php artisan vendor:publish --tag=statisty-views
-php artisan vendor:publish --tag=statisty-assets
-```
-
-### Configuration
-
-Expose the models you want Statisty to read in `config/statisty.php`:
-
-```php
-'models' => [
-    App\Models\User::class => [
-        'enabled' => true,
-        'columns' => ['id', 'name', 'email', 'created_at'],
-        'relations' => [],
-    ],
-],
-```
-
-JSON API routes and web dashboard routes are separated and configurable:
-
-```php
-'routes' => [
-    'api' => [
-        'enabled' => true,
-        'prefix' => 'api/statisty',
-        'middleware' => [],
-    ],
-    'web' => [
-        'enabled' => true,
-        'prefix' => 'web/statisty',
-        'middleware' => ['web'],
-    ],
-],
-```
-
-Default routes:
-
-```text
-GET /api/statisty/health
-GET /api/statisty/metrics/{model}
-GET /api/statisty/tables/{model}
-GET /api/statisty/charts/{model}
-GET /api/statisty/workspace/{name}
-GET /web/statisty/dashboard
-```
-
-### Usage
-
-```php
-use Statisty\Facades\Statisty;
-
-$dashboard = Statisty::workspace('business')
-    ->models([
-        App\Models\User::class,
-        App\Models\Order::class,
-    ])
-    ->pagination(500)
-    ->build();
-
-return $dashboard->toArray();
-```
-
-Verify the installation:
-
-```bash
-php artisan statisty:doctor
-```
-
-## Espanol
-
-Statisty es un paquete de analytics y observabilidad para Laravel que permite construir dashboards a partir de modelos Eloquent.
-
-### Instalacion
-
-```bash
-composer require statisty/statisty
-```
-
-Publique la configuracion, las vistas y los assets del paquete:
-
-```bash
-php artisan vendor:publish --tag=statisty-config
-php artisan vendor:publish --tag=statisty-views
-php artisan vendor:publish --tag=statisty-assets
-```
-
-### Configuracion
-
-Exponga los modelos que Statisty puede leer en `config/statisty.php`:
-
-```php
-'models' => [
-    App\Models\User::class => [
-        'enabled' => true,
-        'columns' => ['id', 'name', 'email', 'created_at'],
-        'relations' => [],
-    ],
-],
-```
-
-Las rutas de API JSON y del dashboard web estan separadas y son configurables:
-
-```php
-'routes' => [
-    'api' => [
-        'enabled' => true,
-        'prefix' => 'api/statisty',
-        'middleware' => [],
-    ],
-    'web' => [
-        'enabled' => true,
-        'prefix' => 'web/statisty',
-        'middleware' => ['web'],
-    ],
-],
-```
-
-Rutas por defecto:
-
-```text
-GET /api/statisty/health
-GET /api/statisty/metrics/{model}
-GET /api/statisty/tables/{model}
-GET /api/statisty/charts/{model}
-GET /api/statisty/workspace/{name}
-GET /web/statisty/dashboard
-```
-
-### Uso
-
-```php
-use Statisty\Facades\Statisty;
-
-$dashboard = Statisty::workspace('business')
-    ->models([
-        App\Models\User::class,
-        App\Models\Order::class,
-    ])
-    ->pagination(500)
-    ->build();
-
-return $dashboard->toArray();
-```
-
-Verifique la instalacion:
-
-```bash
-php artisan statisty:doctor
-```
-
-## License
-
-This package is proprietary. See [LICENSE.md](LICENSE.md).
+*Développé avec ❤️ pour la communauté Laravel.*

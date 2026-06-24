@@ -21,10 +21,21 @@ final class HealthController extends BaseDashboardController
             $checks[] = $this->healthCheck('Report SQL Queries', $queriesCount . ' queries executed', 'ready');
         } catch (\Throwable $e) {}
 
+        $slowQueries = [];
+        $filePath = storage_path('logs/statisty_slow_queries.json');
+        if (file_exists($filePath)) {
+            try {
+                $content = @file_get_contents($filePath);
+                $slowQueries = $content ? json_decode($content, true) ?: [] : [];
+            } catch (\Throwable $e) {}
+        }
+        $slowQueries = array_reverse($slowQueries);
+
         return view('statisty::health', [
             'appName' => config('app.name'),
             'version' => config('statisty.version', '1.0.0'),
             'healthChecks' => $checks,
+            'slowQueries' => $slowQueries,
             ...$this->shellData('health'),
         ]);
     }

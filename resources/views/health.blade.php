@@ -75,4 +75,70 @@
             </div>
         @endforeach
     </section>
+
+    <!-- Slow Queries Section -->
+    <section class="statisty-slow-queries-section" style="margin-top: 32px;">
+        <div class="statisty-card-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div>
+                <h2 style="font-size:18px; font-weight:700; color:var(--text-primary); margin:0;">🐢 Slow Queries Tracker</h2>
+                <p class="statisty-muted" style="margin:4px 0 0; font-size:13px;">Requêtes SQL exécutées par l'application dont le temps d'exécution dépasse {{ config('statisty.features.slow_queries.threshold_ms', 100) }} ms.</p>
+            </div>
+            <span class="statisty-status-badge status-@if(count($slowQueries) > 0)warning @elseready @endif" style="font-size:11px; font-weight:700;">
+                {{ count($slowQueries) }} détectée(s)
+            </span>
+        </div>
+
+        <div class="statisty-jobs-container" style="background:#fff; border:1px solid var(--border-light); border-radius:var(--radius-lg); overflow:hidden;">
+            @if(empty($slowQueries))
+                <div style="padding: 48px; text-align: center; color: var(--text-secondary); font-size: 14px;">
+                    🎉 <strong>Aucune requête lente détectée !</strong> Votre application est rapide.
+                </div>
+            @else
+                <div style="overflow-x: auto;">
+                    <table class="statisty-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr style="background: #fafbfc; border-bottom: 1px solid var(--border-light);">
+                                <th style="padding: 14px 18px; font-size: 12px; font-weight: 700; color: var(--text-secondary); width: 100px;">Temps</th>
+                                <th style="padding: 14px 18px; font-size: 12px; font-weight: 700; color: var(--text-secondary);">Requête SQL</th>
+                                <th style="padding: 14px 18px; font-size: 12px; font-weight: 700; color: var(--text-secondary); width: 180px;">Appelé depuis</th>
+                                <th style="padding: 14px 18px; font-size: 12px; font-weight: 700; color: var(--text-secondary); width: 160px;">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($slowQueries as $query)
+                                <tr style="border-bottom: 1px solid var(--border-light); transition: background-color 0.15s;" onmouseover="this.style.backgroundColor='#f8fafc'" onmouseout="this.style.backgroundColor='transparent'">
+                                    <td style="padding: 16px 18px; vertical-align: top;">
+                                        @php
+                                            $time = $query['time_ms'] ?? 0;
+                                            $badgeClass = $time > 500 ? 'status-failed' : 'status-warning';
+                                        @endphp
+                                        <span class="statisty-status-badge {{ $badgeClass }}" style="font-family: var(--font-mono, monospace); font-weight: 700; font-size: 11.5px; padding: 4px 8px; border-radius: 6px;">
+                                            {{ $time }} ms
+                                        </span>
+                                    </td>
+                                    <td style="padding: 16px 18px; vertical-align: top;">
+                                        <div style="font-family: var(--font-mono, monospace); font-size: 12px; color: #1e293b; word-break: break-all; max-height: 120px; overflow-y: auto; white-space: pre-wrap; line-height: 1.5; background: #fafafa; border: 1px solid #f1f5f9; padding: 8px 12px; border-radius: 6px;">{{ $query['sql'] }}</div>
+                                        @if(!empty($query['bindings']))
+                                            <div style="margin-top: 6px; font-size: 11px; color: var(--text-secondary);">
+                                                <strong>Bindings :</strong> <code>{{ json_encode($query['bindings']) }}</code>
+                                            </div>
+                                        @endif
+                                    </td>
+                                    <td style="padding: 16px 18px; vertical-align: top; font-size: 12.5px; color: #475569;">
+                                        <span style="display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; padding:3px 8px; border-radius:4px; font-size:11.5px; font-weight:600; font-family: var(--font-sans);">
+                                            📄 {{ $query['caller'] }}
+                                        </span>
+                                        <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">Connexion : {{ $query['connection'] ?? 'default' }}</div>
+                                    </td>
+                                    <td style="padding: 16px 18px; vertical-align: top; font-size: 12px; color: var(--text-secondary); white-space: nowrap;">
+                                        {{ date('H:i:s d/m/Y', strtotime($query['created_at'])) }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
+    </section>
 @endsection

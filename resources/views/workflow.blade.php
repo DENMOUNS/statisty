@@ -277,7 +277,7 @@
 document.addEventListener('DOMContentLoaded', function () {
 
     /* ─── Palette & helpers ──────────────────────────────────────────────── */
-    var CHART_URL  = '{{ $chartUrl }}';
+    var CHART_URL  = @json($chartUrl);
     var period     = 'day';
     var dateFrom   = '';
     var dateTo     = '';

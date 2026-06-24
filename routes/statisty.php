@@ -39,5 +39,6 @@ if ((bool) ($webRoutes['enabled'] ?? true)) {
             Route::get('health', [\Statisty\Http\Controllers\HealthController::class, 'health'])->name('health');
             Route::get('logs', [\Statisty\Http\Controllers\LogsController::class, 'logs'])->name('logs');
             Route::get('jobs', [\Statisty\Http\Controllers\JobsController::class, 'jobs'])->name('jobs');
+            Route::get('docs', [\Statisty\Http\Controllers\DocController::class, 'index'])->name('docs');
         });
 }

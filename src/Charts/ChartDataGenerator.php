@@ -255,7 +255,7 @@ final class ChartDataGenerator
             $wrappedDateColumn = $query->getQuery()->getGrammar()->wrap($dateColumn);
             $rows = $query->selectRaw("DATE_FORMAT({$wrappedDateColumn}, '{$format}') as bucket, COUNT(*) as cnt")->groupBy('bucket')->orderBy('bucket')->get();
 
-            return $rows->pluck('cnt', 'bucket')->all();
+            return $rows->pluck('cnt', 'bucket')->map(fn($v) => (int) $v)->all();
         }
 
         // Fallback to PHP grouping
@@ -288,7 +288,7 @@ final class ChartDataGenerator
             $wrappedValueField = $grammar->wrap($valueField);
             $rows = $query->selectRaw("DATE_FORMAT({$wrappedDateColumn}, '{$format}') as bucket, SUM({$wrappedValueField}) as s")->groupBy('bucket')->orderBy('bucket')->get();
 
-            return $rows->pluck('s', 'bucket')->all();
+            return $rows->pluck('s', 'bucket')->map(fn($v) => (float) $v)->all();
         }
 
         $dateKey = str_contains($dateColumn, '.') ? last(explode('.', $dateColumn)) : $dateColumn;

@@ -29,6 +29,7 @@
     <!-- Highcharts + modules -->
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/heatmap.js"></script>
     <script src="https://code.highcharts.com/modules/exporting.js"></script>
     <script src="https://code.highcharts.com/modules/export-data.js"></script>
     <script src="https://code.highcharts.com/modules/accessibility.js"></script>
@@ -39,8 +40,9 @@
     <div class="statisty-layout">
         <!-- Mobile Header -->
         <header class="statisty-mobile-header">
-            <div class="statisty-mobile-brand">
-                <img src="{{ asset('vendor/statisty/logo.png') }}" alt="Statisty" class="statisty-logo-img statisty-logo-full">
+            <div class="statisty-mobile-brand" style="display:flex; align-items:center; gap:8px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ff2d20" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-5 5"/></svg>
+                <span style="font-size:18px; font-weight:800; color:var(--text-primary); letter-spacing:-0.5px;">Statisty</span>
             </div>
             <button id="statistySidebarToggle" aria-label="Toggle Menu" class="statisty-btn-toggle">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -53,8 +55,9 @@
 
         <!-- Sidebar -->
         <aside class="statisty-sidebar" id="statistySidebar">
-            <div class="statisty-sidebar-brand">
-                <img src="{{ asset('vendor/statisty/logo.png') }}" alt="Statisty" class="statisty-logo-img statisty-logo-full">
+            <div class="statisty-sidebar-brand" style="display:flex; align-items:center; gap:10px; padding: 24px 24px 12px 24px;">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ff2d20" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 2px 4px rgba(255,45,32,0.3));"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-5 5"/></svg>
+                <span style="font-size:22px; font-weight:800; color:var(--text-primary); letter-spacing:-0.5px;">Statisty</span>
             </div>
 
             <nav class="statisty-sidebar-nav">
@@ -83,9 +86,11 @@
                 @endif
             </nav>
 
-            <div class="statisty-sidebar-footer">
-                <img src="{{ asset('vendor/statisty/mascotte.png') }}" alt="Mascot" class="statisty-mascotte-footer">
-                <span class="statisty-version-badge">v{{ $version ?? '1.0.0' }}</span>
+            <div class="statisty-sidebar-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-light); margin-top: auto;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Powered by Statisty</span>
+                    <span class="statisty-version-badge">v{{ $version ?? '1.0.0' }}</span>
+                </div>
             </div>
         </aside>
 

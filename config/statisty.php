@@ -41,6 +41,10 @@ return [
         'tables' => true,
         'relationship_discovery' => true,
         'api_stats' => env('STATISTY_API_STATS', true),
+        'slow_queries' => [
+            'enabled' => env('STATISTY_SLOW_QUERIES_ENABLED', true),
+            'threshold_ms' => env('STATISTY_SLOW_QUERIES_THRESHOLD', 100), // ms
+        ],
     ],
 
     'allow_unlisted_models' => env('STATISTY_ALLOW_UNLISTED_MODELS', true),

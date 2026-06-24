@@ -15,9 +15,9 @@
         </section>
     @else
         <div class="statisty-logviewer-layout">
-            <!-- Sidebar with log files -->
+            <!-- Sidebar with log files — fixed height, scrollable -->
             <aside class="statisty-logviewer-sidebar">
-                <span class="statisty-sidebar-title">Log Files</span>
+                <span class="statisty-sidebar-title">Log Files <span class="lf-count">({{ count($logFiles) }})</span></span>
                 <div class="statisty-log-files-list">
                     @foreach($logFiles as $file)
                         @php
@@ -65,49 +65,52 @@
                 <div class="statisty-active-log-info">
                     <span class="active-file-label">Active file:</span>
                     <span class="active-file-name">{{ $activeLogFile['name'] ?? 'None' }}</span>
+                    <span id="logEntriesCount" class="active-file-label" style="margin-left:12px;"></span>
                 </div>
 
-                <!-- Log entries container -->
-                <div class="statisty-log-entries" id="statistyLogEntries">
-                    @forelse($logEntries as $index => $entry)
-                        @php
-                            $level = strtolower($entry['level'] ?? 'info');
-                            $hasStackTrace = preg_match('/Stack trace:/', $entry['message']) || preg_match('/#\d+\s+/', $entry['message']);
-                        @endphp
-                        <article class="statisty-log-entry level-{{ $level }}" data-level="{{ $level }}">
-                            <div class="statisty-log-entry-header">
-                                <div class="statisty-log-entry-meta">
-                                    <span class="statisty-log-level-badge level-{{ $level }}">{{ strtoupper($level) }}</span>
-                                    <span class="statisty-log-time">{{ $entry['time'] ?? 'Unknown Time' }}</span>
+                <!-- Log entries — fixed height, scrollable -->
+                <div class="statisty-log-entries-scroll-wrapper">
+                    <div class="statisty-log-entries" id="statistyLogEntries">
+                        @forelse($logEntries as $index => $entry)
+                            @php
+                                $level = strtolower($entry['level'] ?? 'info');
+                                $hasStackTrace = preg_match('/Stack trace:/', $entry['message']) || preg_match('/#\d+\s+/', $entry['message']);
+                            @endphp
+                            <article class="statisty-log-entry level-{{ $level }}" data-level="{{ $level }}">
+                                <div class="statisty-log-entry-header">
+                                    <div class="statisty-log-entry-meta">
+                                        <span class="statisty-log-level-badge level-{{ $level }}">{{ strtoupper($level) }}</span>
+                                        <span class="statisty-log-time">{{ $entry['time'] ?? 'Unknown Time' }}</span>
+                                    </div>
+                                    @if($hasStackTrace)
+                                        <button class="statisty-log-toggle-trace">Voir la trace</button>
+                                    @endif
                                 </div>
-                                @if($hasStackTrace)
-                                    <button class="statisty-log-toggle-trace">Voir la trace</button>
-                                @endif
-                            </div>
-                            <div class="statisty-log-entry-body">
-                                <span class="statisty-log-message">{{ $entry['message'] }}</span>
-                            </div>
-                        </article>
-                    @empty
-                        <div class="statisty-log-entries-empty">Aucune entrée dans ce fichier.</div>
-                    @endforelse
+                                <div class="statisty-log-entry-body">
+                                    <span class="statisty-log-message">{{ $entry['message'] }}</span>
+                                </div>
+                            </article>
+                        @empty
+                            <div class="statisty-log-entries-empty">Aucune entrée dans ce fichier.</div>
+                        @endforelse
+                    </div>
                 </div>
 
                 <!-- Pagination bar -->
                 <div class="log-pagination-bar" id="logPaginationBar">
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <label style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.7);">Afficher :</label>
-                        <select id="logPageSize" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;font-size:12px;font-family:var(--font-sans);">
+                        <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Afficher :</label>
+                        <select id="logPageSize" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-light);background:#fff;color:var(--text-primary);font-size:12px;font-family:var(--font-sans);">
                             <option value="25" selected>25</option>
                             <option value="50">50</option>
                             <option value="100">100</option>
                             <option value="200">200</option>
                         </select>
-                        <span id="logPaginationInfo" style="font-size:12px;color:rgba(255,255,255,0.6);"></span>
+                        <span id="logPaginationInfo" style="font-size:12px;color:var(--text-secondary);"></span>
                     </div>
-                    <div style="display:flex;gap:4px;">
+                    <div style="display:flex;gap:4px;align-items:center;">
                         <button id="logPrevBtn" class="log-page-btn" disabled>&#8249;</button>
-                        <span id="logPageIndicator" style="font-size:12px;font-weight:600;color:#fff;padding:5px 10px;"></span>
+                        <span id="logPageIndicator" style="font-size:12px;font-weight:600;color:var(--text-primary);padding:5px 10px;"></span>
                         <button id="logNextBtn" class="log-page-btn">&#8250;</button>
                     </div>
                 </div>
@@ -121,11 +124,13 @@
             const searchInput      = document.getElementById('statistyLogSearch');
             const levelSelect      = document.getElementById('statistyLogLevelFilter');
             const entriesContainer = document.getElementById('statistyLogEntries');
+            const scrollWrapper    = entriesContainer ? entriesContainer.closest('.statisty-log-entries-scroll-wrapper') : null;
             const pageSizeEl       = document.getElementById('logPageSize');
             const prevBtn          = document.getElementById('logPrevBtn');
             const nextBtn          = document.getElementById('logNextBtn');
             const pageIndicator    = document.getElementById('logPageIndicator');
             const paginationInfo   = document.getElementById('logPaginationInfo');
+            const entriesCount     = document.getElementById('logEntriesCount');
 
             let allEntries    = entriesContainer ? Array.from(entriesContainer.getElementsByClassName('statisty-log-entry')) : [];
             let visibleEntries = [...allEntries];
@@ -157,8 +162,13 @@
                 for (var i = start; i < end; i++) {
                     if (visibleEntries[i]) visibleEntries[i].style.display = 'block';
                 }
+
+                // Scroll back to top of entries when page changes
+                if (scrollWrapper) scrollWrapper.scrollTop = 0;
+
                 if (pageIndicator)  pageIndicator.textContent  = 'Page ' + currentPage + ' / ' + pages;
-                if (paginationInfo) paginationInfo.textContent  = (start + 1) + '-' + end + ' sur ' + total + ' entrées';
+                if (paginationInfo) paginationInfo.textContent  = total > 0 ? (start + 1) + '–' + end + ' sur ' + total + ' entrées' : '0 entrée';
+                if (entriesCount)   entriesCount.textContent    = total + ' entrée(s) correspondante(s)';
                 if (prevBtn) prevBtn.disabled = currentPage <= 1;
                 if (nextBtn) nextBtn.disabled = currentPage >= pages;
             }
@@ -171,11 +181,22 @@
 
             // Toggle stack traces
             document.querySelectorAll('.statisty-log-toggle-trace').forEach(function(button) {
-                button.addEventListener('click', function () {
+                button.addEventListener('click', function (e) {
+                    e.stopPropagation(); // prevent triggering parent click selection twice
                     var entry = this.closest('.statisty-log-entry');
                     var body  = entry.querySelector('.statisty-log-entry-body');
                     body.classList.toggle('expanded');
                     this.textContent = body.classList.contains('expanded') ? 'Réduire' : 'Voir la trace';
+                });
+            });
+
+            // Click entry to select (becomes sky blue)
+            document.querySelectorAll('.statisty-log-entry').forEach(function(entry) {
+                entry.addEventListener('click', function() {
+                    document.querySelectorAll('.statisty-log-entry').forEach(function(e) {
+                        e.classList.remove('selected');
+                    });
+                    this.classList.add('selected');
                 });
             });
 
@@ -199,20 +220,111 @@
     </script>
 
     <style>
+        /* ── Log viewer layout ─────────────────────────────────────────────── */
+        .statisty-logviewer-layout {
+            display: flex;
+            gap: 0;
+            height: calc(100vh - 160px);
+            min-height: 500px;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-light);
+        }
+
+        /* ── File list sidebar ─────────────────────────────────────────────── */
+        .statisty-logviewer-sidebar {
+            width: 260px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border-light);
+        }
+
+        .statisty-sidebar-title {
+            display: block;
+            padding: 14px 16px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .6px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-light);
+            flex-shrink: 0;
+        }
+        .lf-count { font-weight: 400; opacity: .7; }
+
+        /* Scrollable file list */
+        .statisty-log-files-list {
+            overflow-y: auto;
+            flex: 1;
+            padding: 8px 0;
+        }
+        .statisty-log-files-list::-webkit-scrollbar { width: 5px; }
+        .statisty-log-files-list::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
+
+        /* ── Main log panel ────────────────────────────────────────────────── */
+        .statisty-logviewer-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #ffffff;
+        }
+
+        .statisty-logviewer-filters {
+            flex-shrink: 0;
+            background-color: #fafbfc;
+            border-bottom: 1px solid var(--border-light);
+        }
+        .statisty-active-log-info {
+            flex-shrink: 0;
+            background-color: var(--bg-primary);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        /* Scrollable entries wrapper — takes remaining height */
+        .statisty-log-entries-scroll-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+            background-color: #ffffff;
+        }
+        .statisty-log-entries-scroll-wrapper::-webkit-scrollbar { width: 6px; }
+        .statisty-log-entries-scroll-wrapper::-webkit-scrollbar-track { background: rgba(0,0,0,0.02); }
+        .statisty-log-entries-scroll-wrapper::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 4px; }
+
+        /* Pagination bar always stays at bottom — white theme */
         .log-pagination-bar {
-            display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             padding: 10px 16px;
-            background: rgba(255,255,255,0.05);
-            border-top: 1px solid rgba(255,255,255,0.1);
+            background: #f8fafc;
+            border-top: 1px solid var(--border-light);
         }
         .log-page-btn {
-            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-            color: #fff; padding: 5px 12px; border-radius: 6px; cursor: pointer;
-            font-size: 16px; font-weight: 700; transition: var(--transition-fast);
+            background: #ffffff;
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            transition: var(--transition-fast);
             font-family: var(--font-sans);
         }
-        .log-page-btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
-        .log-page-btn:disabled { opacity: 0.3; cursor: default; }
+        .log-page-btn:hover:not(:disabled) {
+            background: #f1f5f9;
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+        .log-page-btn:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
     </style>
 @endsection
-

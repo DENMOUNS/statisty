@@ -41,6 +41,7 @@ final class DashboardController extends BaseDashboardController
                 'workspace' => $dashboard->workspace,
                 'kpis' => $dashboard->kpis,
                 'models' => $this->modelCards($models),
+                'heatmapData' => $this->getActivityHeatmapData($models),
                 ...$this->shellData('dashboard'),
                 'emptyMessage' => null,
             ]);
@@ -136,5 +137,65 @@ final class DashboardController extends BaseDashboardController
         } catch (\Throwable $e) {
             return 'Unavailable';
         }
+    }
+
+    private function getActivityHeatmapData(array $models): array
+    {
+        $data = [];
+        // Last 12 weeks of activity
+        $startDate = now()->subWeeks(12)->startOfWeek();
+        $now = now()->endOfDay();
+        
+        foreach ($models as $model) {
+            if (!method_exists($model, 'query')) continue;
+            
+            try {
+                $instance = new $model;
+                if (!\Illuminate\Support\Facades\Schema::hasColumn($instance->getTable(), 'created_at')) {
+                    continue;
+                }
+                
+                $query = $model::query()
+                    ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+                    ->where('created_at', '>=', $startDate)
+                    ->groupBy('date')
+                    ->get();
+                    
+                foreach ($query as $row) {
+                    $date = $row->date;
+                    if (!isset($data[$date])) {
+                        $data[$date] = 0;
+                    }
+                    $data[$date] += (int) $row->count;
+                }
+            } catch (\Throwable $e) {}
+        }
+        
+        $heatmapSeries = [];
+        $current = $startDate->copy();
+        $weekIndex = 0;
+        
+        while ($current <= $now) {
+            $dateStr = $current->format('Y-m-d');
+            $count = $data[$dateStr] ?? 0;
+            
+            // 0 = Monday, 6 = Sunday
+            $y = $current->dayOfWeekIso - 1;
+            
+            $heatmapSeries[] = [
+                $weekIndex,
+                $y,
+                $count,
+                $dateStr // For tooltip
+            ];
+            
+            if ($y === 6) { // End of week
+                $weekIndex++;
+            }
+            
+            $current->addDay();
+        }
+        
+        return $heatmapSeries;
     }
 }

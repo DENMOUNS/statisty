@@ -90,6 +90,103 @@
             @endforeach
         </section>
 
+        {{-- ── Heatmap d'activité globale ────────────────────────────────────────── --}}
+        @if(isset($heatmapData) && count($heatmapData) > 0)
+        <section class="statisty-activity-heatmap" style="margin-top: 30px; margin-bottom: 30px; background: #fff; padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm);">
+            <div style="margin-bottom: 16px;">
+                <h2 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">Activité Globale</h2>
+                <p style="margin: 4px 0 0; font-size: 12px; color: var(--text-secondary);">Créations d'enregistrements sur les 12 dernières semaines</p>
+            </div>
+            <div id="hc-activity-heatmap" style="width:100%; height:180px;"></div>
+        </section>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var rawData = @json($heatmapData);
+            
+            // Transformer pour Highcharts : x = semaine, y = jour, value = nombre
+            // rawData format: [weekIndex, dayOfWeekIso_Minus_1, count, dateStr]
+            
+            var maxValue = 0;
+            var hcData = rawData.map(function(item) {
+                var val = item[2];
+                if (val > maxValue) maxValue = val;
+                // Highcharts Heatmap expects y axis reversed by default if we want top to bottom, 
+                // but let's invert Y axis in chart options instead.
+                return {
+                    x: item[0],
+                    y: item[1],
+                    value: val,
+                    date: item[3]
+                };
+            });
+
+            Highcharts.chart('hc-activity-heatmap', {
+                chart: {
+                    type: 'heatmap',
+                    marginTop: 10,
+                    marginBottom: 20,
+                    plotBorderWidth: 0,
+                    backgroundColor: 'transparent',
+                    style: { fontFamily: 'Outfit, ui-sans-serif, sans-serif' }
+                },
+                title: { text: null },
+                credits: { enabled: false },
+                exporting: { enabled: false },
+                xAxis: {
+                    visible: false, // hide weeks text, keep it simple like github
+                },
+                yAxis: {
+                    categories: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+                    title: null,
+                    reversed: true, // Monday at top
+                    labels: { style: { fontSize: '10px', color: '#71717a' } },
+                    gridLineWidth: 0,
+                    lineWidth: 0
+                },
+                colorAxis: {
+                    min: 0,
+                    stops: [
+                        [0, '#f8fafc'], // very light empty
+                        [0.1, '#fecaca'], // very light red
+                        [0.4, '#f87171'], // red
+                        [0.7, '#dc2626'], // darker red
+                        [1, '#991b1b'] // dark red
+                    ]
+                },
+                legend: {
+                    align: 'right',
+                    layout: 'vertical',
+                    margin: 0,
+                    verticalAlign: 'top',
+                    y: 10,
+                    symbolHeight: 120,
+                    itemStyle: { fontSize: '10px', color: '#71717a' }
+                },
+                tooltip: {
+                    formatter: function () {
+                        return '<b>' + this.point.date + '</b><br/>' +
+                               this.point.value + ' enregistrement(s)';
+                    },
+                    backgroundColor: '#ffffff',
+                    borderColor: '#e4e4e7',
+                    borderRadius: 8,
+                    shadow: true
+                },
+                series: [{
+                    name: 'Activité',
+                    borderWidth: 2,
+                    borderColor: '#ffffff',
+                    data: hcData,
+                    dataLabels: {
+                        enabled: false
+                    }
+                }]
+            });
+        });
+        </script>
+        @endif
+
         {{-- ── Grille des Workflows ───────────────────────────────────────────── --}}
         <h2 class="section-title-accent">Workflows configurés</h2>
         <section class="statisty-workflow-grid">
