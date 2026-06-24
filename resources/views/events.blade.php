@@ -8,11 +8,50 @@
     </div>
 </header>
 
-<section class="statisty-panel-section" style="background:#fff; padding:24px; text-align:center; border-radius:var(--radius-lg); border:1px solid var(--border-light); box-shadow:var(--shadow-sm);">
-    <div style="display:inline-flex; align-items:center; justify-content:center; width:48px; height:48px; background:#f1f5f9; color:var(--text-secondary); border-radius:50%; margin-bottom:16px;">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+<section class="statisty-panel-section" style="background:#fff; border-radius:var(--radius-lg); border:1px solid var(--border-light); box-shadow:var(--shadow-sm); overflow:hidden;">
+    <div style="padding:16px; overflow-x:auto;">
+        <table id="eventsTable" class="statisty-table display" style="width:100%; border-collapse:collapse; text-align:left;">
+            <thead>
+                <tr style="background:#f8fafc; border-bottom:1px solid var(--border-light);">
+                    <th style="padding:12px; font-size:12px; color:var(--text-secondary); text-transform:uppercase;">Événement</th>
+                    <th style="padding:12px; font-size:12px; color:var(--text-secondary); text-transform:uppercase;">Listeners Associés</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($eventsData as $data)
+                    <tr style="border-bottom:1px solid #f1f5f9;">
+                        <td style="padding:12px; font-weight:600; color:var(--color-primary); vertical-align:top;">
+                            {{ $data['event'] }}
+                        </td>
+                        <td style="padding:12px; color:#334155; font-family:monospace; font-size:12px;">
+                            <ul style="margin:0; padding-left:16px;">
+                                @foreach($data['listeners'] as $listener)
+                                    <li>{{ $listener }}</li>
+                                @endforeach
+                            </ul>
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
     </div>
-    <h3 style="margin:0 0 8px; font-weight:700;">Fonctionnalité en cours de développement</h3>
-    <p style="color:var(--text-secondary); font-size:14px; max-width:400px; margin:0 auto;">L'écoute en temps réel des événements et listeners via le dispatcher Laravel arrivera dans la prochaine version de Statisty.</p>
 </section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof $.fn.DataTable !== 'undefined' && $('#eventsTable').length > 0) {
+        $('#eventsTable').DataTable({
+            pageLength: 25,
+            lengthMenu: [25, 50, 100],
+            language: {
+                search: '',
+                searchPlaceholder: 'Rechercher un événement…',
+                lengthMenu: 'Afficher _MENU_',
+                info: '_START_ à _END_ sur _TOTAL_',
+                paginate: { first: '«', last: '»', previous: '‹', next: '›' }
+            }
+        });
+    }
+});
+</script>
 @endsection

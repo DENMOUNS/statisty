@@ -45,10 +45,12 @@ if ((bool) ($webRoutes['enabled'] ?? true)) {
             Route::get('commands', [\Statisty\Http\Controllers\CommandsController::class, 'index'])->name('commands');
             Route::post('commands', [\Statisty\Http\Controllers\CommandsController::class, 'execute'])->name('commands.execute');
             Route::get('schedule', [\Statisty\Http\Controllers\ScheduleController::class, 'index'])->name('schedule');
-            Route::get('cache', [\Statisty\Http\Controllers\CacheController::class, 'index'])->name('cache');
-            Route::post('cache/clear', [\Statisty\Http\Controllers\CacheController::class, 'clear'])->name('cache.clear');
+            Route::post('schedule', [\Statisty\Http\Controllers\ScheduleController::class, 'store'])->name('schedule.store');
             Route::get('events', [\Statisty\Http\Controllers\EventsController::class, 'index'])->name('events');
             Route::get('exceptions', [\Statisty\Http\Controllers\ExceptionsController::class, 'index'])->name('exceptions');
             Route::get('models', [\Statisty\Http\Controllers\ModelsController::class, 'index'])->name('models');
+            Route::post('models', [\Statisty\Http\Controllers\ModelsController::class, 'store'])->name('models.store');
+            Route::post('models/alter', [\Statisty\Http\Controllers\ModelsController::class, 'alter'])->name('models.alter');
+            Route::post('models/modify', [\Statisty\Http\Controllers\ModelsController::class, 'modifyModel'])->name('models.modify');
         });
 }

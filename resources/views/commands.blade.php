@@ -25,17 +25,55 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('statisty.web.commands.execute') }}" style="display:flex; gap:12px; align-items:center;">
-        @csrf
-        <select name="command" style="flex:1; padding:10px 14px; border:1px solid var(--border-light); border-radius:var(--radius-md); font-family:var(--font-sans); background:#f8fafc;">
-            <option value="">Sélectionnez une commande...</option>
-            @foreach($commands as $cmd)
-                <option value="{{ $cmd['name'] }}">{{ $cmd['name'] }} - {{ $cmd['description'] }}</option>
-            @endforeach
-        </select>
-        <button type="submit" style="padding:10px 20px; background:var(--color-primary); color:#fff; border:none; border-radius:var(--radius-md); font-weight:600; cursor:pointer;">
-            Exécuter
-        </button>
-    </form>
+    <div style="padding:16px; overflow-x:auto;">
+        <table id="commandsTable" class="statisty-table display" style="width:100%; border-collapse:collapse; text-align:left;">
+            <thead>
+                <tr style="background:#f8fafc; border-bottom:1px solid var(--border-light);">
+                    <th style="padding:12px; font-size:12px; color:var(--text-secondary); text-transform:uppercase;">Nom de la commande</th>
+                    <th style="padding:12px; font-size:12px; color:var(--text-secondary); text-transform:uppercase;">Description</th>
+                    <th style="padding:12px; font-size:12px; color:var(--text-secondary); text-transform:uppercase; text-align:right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($commands as $cmd)
+                    <tr class="cmd-row" style="border-bottom:1px solid #f1f5f9; position:relative;">
+                        <td style="padding:12px; font-weight:600; color:var(--color-primary); width:30%;">{{ $cmd['name'] }}</td>
+                        <td style="padding:12px; color:var(--text-secondary);">{{ $cmd['description'] }}</td>
+                        <td style="padding:12px; text-align:right;">
+                            <form method="POST" action="{{ route('statisty.web.commands.execute') }}" class="cmd-execute-form" style="display:inline-block; opacity:0; transition:opacity 0.2s;">
+                                @csrf
+                                <input type="hidden" name="command" value="{{ $cmd['name'] }}">
+                                <button type="submit" style="padding:6px 12px; background:#10b981; color:#fff; border:none; border-radius:4px; font-weight:600; font-size:11px; cursor:pointer;" onclick="return confirm('Exécuter la commande {{ $cmd['name'] }} ?')">
+                                    Exécuter
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
 </section>
+
+<style>
+.cmd-row:hover .cmd-execute-form { opacity: 1 !important; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof $.fn.DataTable !== 'undefined' && $('#commandsTable').length > 0) {
+        $('#commandsTable').DataTable({
+            pageLength: 25,
+            lengthMenu: [25, 50, 100],
+            language: {
+                search: '',
+                searchPlaceholder: 'Rechercher une commande…',
+                lengthMenu: 'Afficher _MENU_',
+                info: '_START_ à _END_ sur _TOTAL_',
+                paginate: { first: '«', last: '»', previous: '‹', next: '›' }
+            }
+        });
+    }
+});
+</script>
 @endsection

@@ -14,7 +14,7 @@ class ExceptionsController extends BaseDashboardController
                 if (str_contains($line, '.ERROR:') || str_contains($line, 'Exception')) {
                     $exceptions[] = $line;
                 }
-                if (count($exceptions) > 50) break;
+                if (count($exceptions) > 1000) break;
             }
         }
         return view('statisty::exceptions', array_merge($this->shellData('exceptions'), [
