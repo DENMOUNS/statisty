@@ -10,6 +10,19 @@ return [
         'prefix' => env('STATISTY_WORKSPACE_PREFIX', 'statisty'),
     ],
 
+    'routes' => [
+        'api' => [
+            'enabled' => env('STATISTY_API_ENABLED', true),
+            'prefix' => env('STATISTY_API_PREFIX', 'api/statisty'),
+            'middleware' => [],
+        ],
+        'web' => [
+            'enabled' => env('STATISTY_WEB_ENABLED', true),
+            'prefix' => env('STATISTY_WEB_PREFIX', 'web/statisty'),
+            'middleware' => ['web'],
+        ],
+    ],
+
     'pagination' => [
         'default' => 500,
         'max' => 1000,

@@ -44,7 +44,7 @@ class CohortEndpointTest extends TestCase
             public $timestamps = false;
         };
 
-        $url = '/statisty/metrics/' . urlencode(get_class($model));
+        $url = '/api/statisty/metrics/' . urlencode(get_class($model));
 
         $response = $this->getJson($url . '?type=cohort&period=day&periods=3');
 

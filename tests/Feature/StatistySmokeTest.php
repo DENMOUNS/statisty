@@ -15,7 +15,7 @@ final class StatistySmokeTest extends TestCase
 
     public function test_health_endpoint(): void
     {
-        $resp = $this->get('/statisty/health');
+        $resp = $this->get('/api/statisty/health');
 
         $resp->assertStatus(200);
         $resp->assertJson(['status' => 'ok']);

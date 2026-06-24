@@ -16,7 +16,7 @@ final class SecurityTest extends TestCase
         Item::create(['user_id' => 1, 'name' => 'Secret item', 'secret' => 'TOPSECRET']);
 
         $controller = new TableController();
-        $request = Request::create('/statisty/tables', 'GET', ['columns' => ['id', 'name', 'secret']]);
+        $request = Request::create('/api/statisty/tables', 'GET', ['columns' => ['id', 'name', 'secret']]);
 
         $response = $controller->index($request, Item::class);
 
@@ -35,7 +35,7 @@ final class SecurityTest extends TestCase
         config(['statisty.disabled_models' => [Item::class]]);
 
         $controller = new TableController();
-        $request = Request::create('/statisty/tables', 'GET');
+        $request = Request::create('/api/statisty/tables', 'GET');
 
         $response = $controller->index($request, Item::class);
 

@@ -43,7 +43,7 @@ class AnomalyEndpointTest extends TestCase
             public $timestamps = false;
         };
 
-        $url = '/statisty/metrics/' . urlencode(get_class($model));
+        $url = '/api/statisty/metrics/' . urlencode(get_class($model));
 
         $response = $this->getJson($url . '?type=anomaly&field=value&period=day&threshold=3');
 

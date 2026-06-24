@@ -2,7 +2,7 @@
     "name": "statisty/statisty",
     "description": "Laravel Analytics & Observability Engine",
     "type": "library",
-    "license": "Apache-2.0",
+    "license": "proprietary",
     "version": "1.0.0",
     "keywords": [
         "laravel",

@@ -58,7 +58,7 @@ final class PriorityHighTest extends TestCase
         config()->set('statisty.allow_unlisted_models', false);
         config()->set('statisty.models', []);
 
-        $this->getJson('/statisty/tables/' . urlencode(PriorityEvent::class))
+        $this->getJson('/api/statisty/tables/' . urlencode(PriorityEvent::class))
             ->assertStatus(404)
             ->assertJson(['error' => 'invalid_model']);
     }
@@ -75,7 +75,7 @@ final class PriorityHighTest extends TestCase
             ],
         ]);
 
-        $response = $this->getJson('/statisty/tables/' . urlencode(PriorityEvent::class) . '?columns[]=status&columns[]=amount&columns[]=user.email&columns[]=user.password');
+        $response = $this->getJson('/api/statisty/tables/' . urlencode(PriorityEvent::class) . '?columns[]=status&columns[]=amount&columns[]=user.email&columns[]=user.password');
 
         // debug output to capture server error details during CI run
         file_put_contents('php://stderr', "RESPONSE_BODY:\n" . $response->getContent() . "\n");
@@ -94,13 +94,13 @@ final class PriorityHighTest extends TestCase
         config()->set('statisty.security.enforce_authorization', true);
         Gate::define('viewAny', fn($user = null, string $model = '') => false);
 
-        $this->getJson('/statisty/tables/' . urlencode(PriorityEvent::class))
+        $this->getJson('/api/statisty/tables/' . urlencode(PriorityEvent::class))
             ->assertStatus(403)
             ->assertJson(['error' => 'unauthorized']);
 
         Statisty::authorizeUsing(fn() => true);
 
-        $this->getJson('/statisty/tables/' . urlencode(PriorityEvent::class))
+        $this->getJson('/api/statisty/tables/' . urlencode(PriorityEvent::class))
             ->assertStatus(200);
     }
 
@@ -113,7 +113,7 @@ final class PriorityHighTest extends TestCase
             'field' => 'amount',
         ]);
 
-        $this->getJson('/statisty/metrics/ignored?type=sum&definition=total_amount')
+        $this->getJson('/api/statisty/metrics/ignored?type=sum&definition=total_amount')
             ->assertStatus(200)
             ->assertJsonPath('value', 30);
     }

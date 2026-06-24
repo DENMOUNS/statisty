@@ -71,7 +71,7 @@ class TableQueryBuilderTest extends TestCase
 
     public function test_table_endpoint_does_not_expose_hidden_relation_columns()
     {
-        $url = '/statisty/tables/' . urlencode(StatistyTableEntry::class);
+        $url = '/api/statisty/tables/' . urlencode(StatistyTableEntry::class);
 
         $response = $this->getJson($url . '?columns[]=user.email&columns[]=user.password');
 

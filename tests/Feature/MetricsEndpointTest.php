@@ -42,7 +42,7 @@ class MetricsEndpointTest extends TestCase
             public $timestamps = false;
         };
 
-        $url = '/statisty/metrics/' . urlencode(get_class($model));
+        $url = '/api/statisty/metrics/' . urlencode(get_class($model));
 
         $response = $this->getJson($url . '?type=count');
 
@@ -62,7 +62,7 @@ class MetricsEndpointTest extends TestCase
 
         config()->set('statisty.disabled_models', [get_class($model)]);
 
-        $url = '/statisty/metrics/' . urlencode(get_class($model));
+        $url = '/api/statisty/metrics/' . urlencode(get_class($model));
 
         $this->getJson($url . '?type=count')
             ->assertStatus(403)

@@ -54,7 +54,7 @@ class FunnelEndpointTest extends TestCase
             ['column' => 'step', 'operator' => '=', 'value' => 'B'],
         ];
 
-        $url = '/statisty/metrics/' . urlencode(get_class($model));
+        $url = '/api/statisty/metrics/' . urlencode(get_class($model));
 
         $response = $this->getJson($url . '?type=funnel&steps=' . urlencode(json_encode($steps)));
 

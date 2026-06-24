@@ -17,7 +17,7 @@ final class CsvExportTest extends TestCase
         Item::create(['user_id' => 2, 'name' => 'B', 'secret' => 'Y']);
 
         $controller = new TableController();
-        $request = Request::create('/statisty/tables', 'GET', ['export' => 'csv']);
+        $request = Request::create('/api/statisty/tables', 'GET', ['export' => 'csv']);
 
         $response = $controller->index($request, Item::class);
 

@@ -29,6 +29,7 @@ abstract class TestCase extends OrchestraTestCase
         // simple cache driver
         $app['config']->set('cache.default', 'array');
         $app['config']->set('app.debug', true);
+        $app['config']->set('app.key', 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
         // disable authorization enforcement for HTTP feature tests by default
         $app['config']->set('statisty.security.enforce_authorization', false);
 
