@@ -39,6 +39,6 @@ final class SecurityTest extends TestCase
 
         $response = $controller->index($request, Item::class);
 
-        $this->assertEquals(404, $response->getStatusCode());
+        $this->assertEquals(403, $response->getStatusCode());
     }
 }

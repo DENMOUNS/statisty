@@ -107,6 +107,8 @@ final class StatistyServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__ . '/../../resources/js/statisty.js' => public_path('vendor/statisty/statisty.js'),
             __DIR__ . '/../../resources/css/statisty.css' => public_path('vendor/statisty/statisty.css'),
+            __DIR__ . '/../../resources/logo.png' => public_path('vendor/statisty/logo.png'),
+            __DIR__ . '/../../resources/mascotte.png' => public_path('vendor/statisty/mascotte.png'),
         ], 'statisty-assets');
 
         $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'statisty');

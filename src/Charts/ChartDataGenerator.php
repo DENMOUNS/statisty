@@ -17,7 +17,7 @@ final class ChartDataGenerator
      *
      * Options supportées:
      * - from, to : date range (Y-m-d or any strtotime)
-     * - period : day|week|month
+     * - period : day|week|month|year
      * - label : label du dataset
      * - max_categories_for_pie : int
      */
@@ -36,7 +36,7 @@ final class ChartDataGenerator
         }
 
         $period = $options['period'] ?? 'day';
-        $allowed = ['day', 'week', 'month'];
+        $allowed = ['day', 'week', 'month', 'year'];
         if (! in_array($period, $allowed, true)) {
             $period = 'day';
         }
@@ -201,6 +201,7 @@ final class ChartDataGenerator
             $format = match ($period) {
                 'month' => '%Y-%m',
                 'week' => '%x-W%v',
+                'year' => '%Y',
                 default => '%Y-%m-%d',
             };
 
@@ -230,6 +231,7 @@ final class ChartDataGenerator
             $format = match ($period) {
                 'month' => '%Y-%m',
                 'week' => '%x-W%v',
+                'year' => '%Y',
                 default => '%Y-%m-%d',
             };
 
@@ -299,6 +301,7 @@ final class ChartDataGenerator
         return match ($period) {
             'week' => $date->format('o') . ' W' . $date->weekOfYear,
             'month' => $date->format('Y-m'),
+            'year' => $date->format('Y'),
             default => $date->format('Y-m-d'),
         };
     }

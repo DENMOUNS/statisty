@@ -34,7 +34,52 @@ final class HttpEndpointsTest extends TestCase
         $this->get('/web/statisty/dashboard')
             ->assertStatus(200)
             ->assertSee('Item')
-            ->assertSee('Dashboard row')
-            ->assertSee('active');
+            ->assertSee('Explore Workflow');
+    }
+
+    public function test_workflow_details_renders_successfully(): void
+    {
+        config(['statisty.models' => [
+            Item::class => [
+                'enabled' => true,
+                'columns' => ['id', 'name', 'status', 'created_at'],
+            ],
+        ]]);
+
+        Item::create(['name' => 'Workflow row details', 'status' => 'completed']);
+
+        // Test detailed workflow view
+        $escapedClass = str_replace('\\', '%5C', Item::class);
+        $this->get('/web/statisty/workflow/' . $escapedClass)
+            ->assertStatus(200)
+            ->assertSee('Item Analysis')
+            ->assertSee('Trend Analysis')
+            ->assertSee('Recent Records')
+            ->assertSee('Workflow row details')
+            ->assertSee('completed');
+    }
+
+    public function test_new_web_endpoints_render_successfully(): void
+    {
+        // 1. Test health view
+        $this->get('/web/statisty/health')
+            ->assertStatus(200)
+            ->assertSee('Project Health')
+            ->assertSee('Laravel')
+            ->assertSee('Environment');
+
+        // 2. Test logs view
+        $this->get('/web/statisty/logs')
+            ->assertStatus(200)
+            ->assertSee('Log Viewer');
+
+        // 3. Test jobs view
+        $this->get('/web/statisty/jobs')
+            ->assertStatus(200)
+            ->assertSee('Queue')
+            ->assertSee('Jobs Tracker')
+            ->assertSee('Running Jobs')
+            ->assertSee('Pending Jobs')
+            ->assertSee('Failed Jobs');
     }
 }
