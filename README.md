@@ -1,16 +1,23 @@
-# Statisty 📊
+<p align="center">
+    <h1 align="center">📊 Statisty for Laravel</h1>
+</p>
 
-> **Statisty** est un package Laravel conçu pour générer instantanément un tableau de bord analytique puissant, beau et dynamique pour votre application. Il inspecte automatiquement vos modèles Eloquent et génère des KPIs, des graphiques Highcharts interactifs et des DataTables avancées.
+<p align="center">
+    <strong>Le tableau de bord analytique ultime, généré automatiquement pour vos modèles Eloquent.</strong>
+</p>
 
 ---
 
-## 🚀 Fonctionnalités Principales
+**Statisty** est un package Laravel conçu pour transformer instantanément votre base de données en un tableau de bord analytique riche, interactif et professionnel. Sans avoir à écrire une seule ligne de code frontend, Statisty inspecte vos modèles et génère des KPIs, des graphiques Highcharts et des tableaux de données interactifs.
 
-- **Zéro Configuration Requise :** Installez le package et accédez immédiatement à votre tableau de bord. Statisty découvre automatiquement vos modèles et leurs relations.
-- **Tableau de Bord Global :** Une vue d'ensemble avec l'état de santé de l'application, une Heatmap d'activité globale (façon GitHub) et vos métriques clés.
-- **Workflows par Modèle :** Des pages dédiées pour chaque modèle avec des graphiques d'évolution, de distribution, et une DataTable avec recherche globale et export (PDF/Excel/CSV).
-- **Détection Automatique des KPIs :** Calcule les totaux, les sommes et les moyennes en inspectant le typage de vos colonnes en base de données.
-- **Documentation API Automatique :** Génère une documentation de vos routes (hors vendor) en parsant vos contrôleurs, requêtes de formulaires (FormRequests), DTOs et annotations PHPDoc (`@bodyParam`).
+## 🚀 Fonctionnalités
+
+- **Zéro Configuration Requise :** Installez le package, et votre tableau de bord est prêt.
+- **Workflows Dynamiques :** Une page dédiée par modèle comprenant des graphiques (Area, Spline, Pie, Bar) et des DataTables avec filtres, recherche globale et export (PDF, Excel, CSV, Print).
+- **Détection Intelligente des KPIs :** Calcule automatiquement les totaux, sommes et moyennes en inspectant le typage de vos colonnes (ex: `price`, `amount`, `total`).
+- **Générateur de Documentation API :** Scanne vos contrôleurs, FormRequests et annotations (`@bodyParam`, `@queryParam`) pour générer automatiquement la documentation de votre API.
+- **Suivi des Slow Queries :** Détecte et enregistre les requêtes SQL lentes directement dans le tableau de bord pour optimiser les performances.
+- **Diagnostic de Santé (Health) :** Vérification en temps réel de votre base de données, du cache, des logs, et du mode debug.
 
 ---
 
@@ -21,75 +28,127 @@
 composer require denmouns/statisty
 ```
 
-2. Publiez les assets (CSS/JS) et le fichier de configuration :
+2. Publiez les assets (CSS, JS, Images) et le fichier de configuration :
 ```bash
 php artisan vendor:publish --tag=statisty-config
 php artisan vendor:publish --tag=statisty-assets
 ```
 
-3. (Optionnel) Lancez la commande de découverte si vous souhaitez cacher le profil de vos modèles pour de meilleures performances :
+*(Optionnel)* Pour de meilleures performances en production, lancez la commande de découverte afin de cacher la structure de vos modèles :
 ```bash
 php artisan statisty:discover
 ```
 
 ---
 
-## ⚙️ Configuration
+## 🚦 Démarrage Rapide
 
-Le fichier de configuration sera publié dans `config/statisty.php`.
-Vous pouvez y activer ou désactiver l'API interne, configurer le routage, et cibler les modèles spécifiques à afficher.
+Par défaut, Statisty est directement accessible à l'URL suivante sur votre application locale :
 
-### URL d'accès
-Par défaut, le tableau de bord est accessible sur :
-```
+```text
 http://votre-app.test/web/statisty/dashboard
 ```
 
-### Sécurité & Middlewares
-Dans `config/statisty.php`, vous pouvez protéger l'accès à Statisty en ajoutant des middlewares Laravel standards (ex: `auth`, `can:view-dashboard`) :
+Sur cette page, vous retrouverez :
+- Une **Heatmap d'activité** de votre application sur les 12 dernières semaines.
+- Les **KPIs globaux** de vos modèles.
+- Un accès rapide aux **Workflows** de chaque modèle configuré.
+
+---
+
+## ⚙️ Configuration Détaillée
+
+Toute la configuration s'effectue dans le fichier publié `config/statisty.php`. Voici les sections clés pour personnaliser Statisty selon vos besoins.
+
+### 1. Sécurité et Accès (Middlewares)
+Par défaut, Statisty est ouvert. **En production, il est crucial de protéger l'accès.**
+Ouvrez `config/statisty.php` et ajoutez vos middlewares (comme `auth` ou un middleware personnalisé) dans la clé `routes.web.middleware` :
 
 ```php
 'routes' => [
     'web' => [
         'enabled' => true,
         'prefix' => 'web/statisty',
-        'middleware' => ['web', 'auth'], // <- Ajoutez 'auth' ici
+        'middleware' => ['web', 'auth', 'can:view-dashboard'], // Sécurisez l'accès ici
     ],
-    // ...
-]
+    // Vous pouvez également désactiver l'API interne si vous n'utilisez pas les graphiques dynamiques
+    'api' => [
+        'enabled' => true,
+        'prefix' => 'api/statisty',
+        'middleware' => ['auth:sanctum'], // Protection de l'API interne
+    ],
+],
 ```
 
+### 2. Configuration des Modèles (Workflows)
+Statisty vous permet de choisir précisément quels modèles exposer, et surtout quelles colonnes ou relations afficher dans le tableau de données. 
+
+Rendez-vous dans la clé `'models'` de `config/statisty.php` :
+
+```php
+'models' => [
+    App\Models\Order::class => [
+        'enabled' => true,
+        // Les colonnes exactes à afficher dans la DataTable
+        'columns' => ['id', 'user_id', 'total_amount', 'status', 'created_at'],
+        
+        // Définir les relations pour extraire des métriques croisées
+        'relations' => [
+            'user' => ['columns' => ['id', 'name', 'email']],
+            'orderItems' => ['columns' => ['id', 'product_id', 'quantity', 'price']],
+        ],
+    ],
+    
+    // Vous pouvez désactiver un modèle sans le supprimer du fichier
+    App\Models\Invoice::class => [
+        'enabled' => false, 
+    ],
+],
+```
+
+> **Astuce :** Si vous souhaitez que Statisty ignore certains modèles (ex: `PersonalAccessToken`), ajoutez-les dans le tableau `'disabled_models'`.
+
+### 3. Masquage des Données Sensibles
+Statisty masque par défaut certaines colonnes (comme `password` ou `remember_token`). Vous pouvez étendre cette liste pour protéger vos données confidentielles :
+
+```php
+'security' => [
+    'hidden_columns' => [
+        'password', 'remember_token', 'api_token', 'secret', 'stripe_key', 'ssn'
+    ],
+],
+```
+
+### 4. Suivi des Slow Queries
+Statisty intègre un tracker de requêtes lentes. Il écoute les événements de la base de données et consigne les requêtes dépassant un certain seuil.
+
+```php
+'features' => [
+    'slow_queries' => [
+        'enabled' => env('STATISTY_SLOW_QUERIES_ENABLED', true),
+        'threshold_ms' => 100, // Enregistrer toute requête prenant plus de 100 millisecondes
+    ],
+],
+```
+Vous pouvez consulter ces requêtes directement depuis le menu **Logs** de Statisty.
+
 ---
 
-## 🧑‍💻 Publication sur Packagist (Mise en ligne)
+## 📚 Menu de Navigation
 
-Pour rendre ce package disponible à tous les développeurs via `composer require`, suivez ces étapes :
+Une fois dans Statisty, utilisez la barre latérale pour naviguer :
 
-1. **Vérifier le `composer.json` :** Assurez-vous que le fichier `composer.json` à la racine de votre package est valide et contient un nom unique, ex : `"name": "votre-pseudo/statisty"`.
-2. **Initialiser Git & Pousser sur GitHub :**
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial release"
-   git branch -M main
-   git remote add origin https://github.com/votre-pseudo/statisty.git
-   git push -u origin main
-   ```
-3. **Créer une release (Tag) :** Sur GitHub, créez une *Release* ou taguez simplement votre commit : `git tag v1.0.0` puis `git push --tags`.
-4. **Soumettre à Packagist :** 
-   - Créez un compte sur [Packagist.org](https://packagist.org/)
-   - Cliquez sur **Submit** et collez l'URL de votre dépôt GitHub.
-   - Et voilà ! N'importe qui pourra faire `composer require votre-pseudo/statisty`.
+- **Dashboard :** L'accueil, avec la heatmap globale et un résumé des workflows.
+- **Workflows :** Un menu listant tous vos modèles configurés. Cliquez sur un modèle pour voir ses graphiques (Line, Bar, Pie) et exporter ses données.
+- **Health :** Un diagnostic de votre environnement (connexion BDD, permissions de logs, mode debug).
+- **Logs :** Visionneuse de logs Laravel intégrée (`laravel.log`) et accès aux **Slow Queries**.
+- **Jobs :** Interface pour surveiller l'état de vos queues (si utilisé).
+- **API Docs :** Documentation auto-générée de votre API basée sur la réflexion de vos contrôleurs et annotations `@bodyParam` / `@queryParam`.
 
 ---
 
-## 💡 Idées d'évolutions futures
+## 🤝 Contribution & Support
 
-- Export de rapports planifiés (PDF/Excel) par email via le Scheduler Laravel.
-- Créateur de requêtes personnalisées (Builder SQL visuel en Drag & Drop).
-- Détection d'anomalies de données avec alertes (ex: +300% d'inscriptions aujourd'hui).
-- Analyse de Cohorte intégrée pour les modèles liés aux utilisateurs/abonnements.
+Si vous trouvez un bug ou souhaitez proposer une nouvelle fonctionnalité, n'hésitez pas à ouvrir une *Issue* ou soumettre une *Pull Request* sur notre dépôt GitHub.
 
----
-
-*Développé avec ❤️ pour la communauté Laravel.*
+*Développé avec passion pour la communauté Laravel.*
