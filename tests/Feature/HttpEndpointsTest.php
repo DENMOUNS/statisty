@@ -53,8 +53,8 @@ final class HttpEndpointsTest extends TestCase
         $this->get('/web/statisty/workflow/' . $escapedClass)
             ->assertStatus(200)
             ->assertSee('Item Analysis')
-            ->assertSee('Trend Analysis')
-            ->assertSee('Recent Records')
+            ->assertSee('Évolution')
+            ->assertSee('Données')
             ->assertSee('Workflow row details')
             ->assertSee('completed');
     }

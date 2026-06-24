@@ -16,13 +16,152 @@
 {{-- KPIs --}}
 <section class="statisty-kpi-grid">
     @foreach($kpis as $kpi)
-    <article class="statisty-kpi">
+    @php
+        $kpiType = $kpi['type'] ?? 'count';
+        $kpiClass = match($kpiType) {
+            'sum'    => 'kpi-sum',
+            'avg'    => 'kpi-avg',
+            'status' => 'kpi-status kpi-status--' . \Illuminate\Support\Str::slug($kpi['status'] ?? 'default'),
+            default  => 'kpi-total',
+        };
+    @endphp
+    <article class="statisty-kpi {{ $kpiClass }}">
+        <div class="statisty-kpi-icon">
+            @if($kpiType === 'total' || $kpiType === 'count')
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            @elseif($kpiType === 'sum')
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
+            @elseif($kpiType === 'avg')
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12h18M3 6l6 6-6 6"/></svg>
+            @else
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            @endif
+        </div>
         <div class="statisty-kpi-label">{{ $kpi['label'] }}</div>
         <div class="statisty-kpi-value">{{ $kpi['value'] }}</div>
-        <div class="statisty-kpi-meta"><span class="statisty-status-badge status-ready">{{ $kpi['sub'] }}</span></div>
+        <div class="statisty-kpi-meta"><span class="statisty-kpi-sub">{{ $kpi['sub'] }}</span></div>
     </article>
     @endforeach
 </section>
+
+{{-- Section Analyse par Statut (auto-générée si status détecté) --}}
+@if(!empty($statusBreakdown))
+@foreach($statusBreakdown as $statusCol => $breakdown)
+<section class="statisty-panel-section statisty-status-section">
+    <div class="wf-status-header">
+        <div>
+            <h3>Analyse par <code>{{ $statusCol }}</code></h3>
+            <p>Répartition automatique selon les valeurs distinctes du champ statut</p>
+        </div>
+    </div>
+
+    <div class="wf-status-layout">
+        {{-- Donut Highcharts --}}
+        <div class="wf-status-donut-card">
+            <div id="hc-status-{{ $loop->index }}" style="width:100%;height:300px;"></div>
+        </div>
+
+        {{-- Tableau de répartition --}}
+        <div class="wf-status-table-card">
+            <table class="wf-status-table">
+                <thead>
+                    <tr>
+                        <th>Statut</th>
+                        <th>Count</th>
+                        <th>%</th>
+                        @foreach($numericColumns as $numCol)
+                        <th>Σ {{ ucwords(str_replace('_', ' ', $numCol)) }}</th>
+                        @endforeach
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($breakdown as $item)
+                    @php
+                        $slug = \Illuminate\Support\Str::slug($item['value']);
+                        $palette = ['#ff2d20','#f97316','#f59e0b','#10b981','#6366f1','#8b5cf6','#ec4899','#06b6d4'];
+                        $color = $palette[$loop->index % count($palette)];
+                    @endphp
+                    <tr class="wf-status-row">
+                        <td>
+                            <span class="wf-status-dot" style="background:{{ $color }}"></span>
+                            <span class="wf-status-label">{{ ucfirst(str_replace(['_','-'], ' ', $item['value'])) }}</span>
+                        </td>
+                        <td class="wf-status-count">{{ number_format($item['count']) }}</td>
+                        <td>
+                            <div class="wf-status-bar-wrap">
+                                <div class="wf-status-bar" style="width:{{ $item['percent'] }}%;background:{{ $color }}"></div>
+                                <span>{{ $item['percent'] }}%</span>
+                            </div>
+                        </td>
+                        @foreach($numericColumns as $numCol)
+                        <td class="wf-status-num">{{ $item['numeric_sums'][$numCol] ?? '—' }}</td>
+                        @endforeach
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {{-- Script donut pour ce statut --}}
+    <script>
+    (function() {
+        var breakdownData = @json($breakdown);
+        var palette = ['#ff2d20','#f97316','#f59e0b','#10b981','#6366f1','#8b5cf6','#ec4899','#06b6d4'];
+        var pieData = breakdownData.map(function(item, i) {
+            return {
+                name: item.value.charAt(0).toUpperCase() + item.value.slice(1).replace(/[_-]/g, ' '),
+                y: item.count,
+                color: palette[i % palette.length]
+            };
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            Highcharts.chart('hc-status-{{ $loop->index }}', {
+                chart: {
+                    type: 'pie',
+                    style: { fontFamily: 'Outfit, ui-sans-serif, sans-serif' },
+                    backgroundColor: '#ffffff'
+                },
+                title: { text: null },
+                credits: { enabled: false },
+                tooltip: {
+                    pointFormat: '<b>{point.name}</b><br>Count: <b>{point.y}</b><br>Part: <b>{point.percentage:.1f}%</b>',
+                    backgroundColor: '#ffffff',
+                    borderColor: '#e4e4e7',
+                    borderRadius: 8,
+                    shadow: true
+                },
+                plotOptions: {
+                    pie: {
+                        innerSize: '58%',
+                        allowPointSelect: true,
+                        cursor: 'pointer',
+                        showInLegend: true,
+                        dataLabels: {
+                            enabled: true,
+                            format: '<b>{point.name}</b>: {point.percentage:.1f}%',
+                            style: { fontSize: '11px', fontWeight: '600' }
+                        }
+                    }
+                },
+                legend: {
+                    enabled: true,
+                    layout: 'vertical',
+                    align: 'right',
+                    verticalAlign: 'middle',
+                    itemStyle: { fontWeight: '600', fontSize: '12px' }
+                },
+                series: [{ name: '{{ $statusCol }}', colorByPoint: true, data: pieData }],
+                exporting: { enabled: true }
+            });
+        });
+    })();
+    </script>
+</section>
+@endforeach
+@endif
+
 
 {{-- Contrôles période (partagés entre graphiques) --}}
 <section class="statisty-panel-section">
@@ -44,6 +183,17 @@
             <input type="date" id="wf-date-to" class="wf-date-input">
             <button id="wf-apply-dates" class="wf-apply-btn">Appliquer</button>
         </div>
+
+        @if(!empty($chartMetrics) && count($chartMetrics) > 1)
+        <div class="wf-metric-group" style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+            <span class="wf-ctrl-label">Métrique :</span>
+            <select id="wf-metric-select" class="wf-type-sel" style="font-size:12px; padding:6px 12px; border-radius: var(--radius-sm);">
+                @foreach($chartMetrics as $metric)
+                    <option value="{{ $metric['value'] }}">{{ $metric['label'] }}</option>
+                @endforeach
+            </select>
+        </div>
+        @endif
     </div>
 
     {{-- 3 graphiques --}}
@@ -131,6 +281,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var period     = 'day';
     var dateFrom   = '';
     var dateTo     = '';
+    var metric     = '';
     var lineType   = 'areaspline';
     var barType    = 'column';
     var charts     = {};
@@ -141,6 +292,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var url = CHART_URL + '?period=' + period;
         if (dateFrom) url += '&date_from=' + dateFrom;
         if (dateTo)   url += '&date_to='   + dateTo;
+        if (metric)   url += '&value='     + metric;
         return url;
     }
 
@@ -287,6 +439,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (dateFrom || dateTo) loadCharts();
     });
 
+    /* ─── Sélecteur de Métrique ─────────────────────────────────────────── */
+    var metricSelect = document.getElementById('wf-metric-select');
+    if (metricSelect) {
+        metricSelect.addEventListener('change', function() {
+            metric = this.value;
+            loadCharts();
+        });
+    }
+
     /* ─── DataTable ──────────────────────────────────────────────────────── */
     if (document.getElementById('wf-datatable') && typeof $.fn.DataTable !== 'undefined') {
 
@@ -342,6 +503,97 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <style>
+/* ─── KPI types ────────────────────────────────────────────────────────── */
+.statisty-kpi {
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.statisty-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.statisty-kpi-icon {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 10px;
+    background: rgba(255,45,32,.08);
+    color: var(--color-primary);
+}
+.statisty-kpi-sub {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+.kpi-total .statisty-kpi-icon { background: rgba(99,102,241,.08); color: #6366f1; }
+.kpi-total { border-top: 3px solid #6366f1; }
+.kpi-sum .statisty-kpi-icon  { background: rgba(16,185,129,.08); color: #10b981; }
+.kpi-sum  { border-top: 3px solid #10b981; }
+.kpi-avg .statisty-kpi-icon  { background: rgba(245,158,11,.08); color: #f59e0b; }
+.kpi-avg  { border-top: 3px solid #f59e0b; }
+.kpi-status { border-top: 3px solid var(--color-primary); }
+.kpi-status .statisty-kpi-icon { background: rgba(255,45,32,.08); color: var(--color-primary); }
+
+/* ─── Status section ───────────────────────────────────────────────────── */
+.statisty-status-section {
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+}
+.wf-status-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 20px; padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-light);
+}
+.wf-status-header h3 { margin: 0 0 3px; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.wf-status-header p  { margin: 0; font-size: 12px; color: var(--text-secondary); }
+.wf-status-header code { font-size: 13px; font-weight: 700; color: var(--color-primary); background: #fef2f2; padding: 2px 6px; border-radius: 4px; }
+.wf-status-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+@media (max-width: 900px) { .wf-status-layout { grid-template-columns: 1fr; } }
+.wf-status-donut-card {
+    background: #fafafa;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 12px;
+}
+.wf-status-table-card { overflow-x: auto; }
+.wf-status-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+}
+.wf-status-table thead th {
+    text-align: left; padding: 8px 12px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text-secondary); background: #f9fafb;
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+}
+.wf-status-table thead th:not(:first-child) { text-align: right; }
+.wf-status-row td { padding: 10px 12px; border-bottom: 1px solid #f4f4f5; vertical-align: middle; }
+.wf-status-row:last-child td { border-bottom: none; }
+.wf-status-row:hover { background: #fafafa; }
+.wf-status-dot {
+    display: inline-block; width: 9px; height: 9px;
+    border-radius: 50%; margin-right: 8px; flex-shrink: 0;
+}
+.wf-status-label { font-weight: 600; color: var(--text-primary); }
+.wf-status-count { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wf-status-num   { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.wf-status-bar-wrap {
+    display: flex; align-items: center; gap: 8px; min-width: 100px;
+    justify-content: flex-end;
+}
+.wf-status-bar {
+    height: 6px; border-radius: 3px; min-width: 2px;
+    transition: width 0.4s ease;
+}
+.wf-status-bar-wrap span { font-size: 11px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+
 /* ─── Contrôles période ────────────────────────────────────────────────── */
 .wf-chart-controls-bar {
     display: flex; flex-wrap: wrap; align-items: center;

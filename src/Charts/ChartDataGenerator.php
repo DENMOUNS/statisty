@@ -31,8 +31,18 @@ final class ChartDataGenerator
             throw new \InvalidArgumentException("Date column [{$dateColumn}] is not available for charts.");
         }
 
-        if ($valueField !== null && ! ModelSchema::isVisibleColumn($modelClass, $valueField)) {
-            throw new \InvalidArgumentException("Value column [{$valueField}] is not available for charts.");
+        if ($valueField !== null) {
+            if (str_contains($valueField, '.')) {
+                [$relationName, $relField] = explode('.', $valueField, 2);
+                $instance = new $modelClass();
+                if (! ModelSchema::isVisibleRelationColumn($instance, $relationName, $relField)) {
+                    throw new \InvalidArgumentException("Relation column [{$valueField}] is not available for charts.");
+                }
+            } else {
+                if (! ModelSchema::isVisibleColumn($modelClass, $valueField)) {
+                    throw new \InvalidArgumentException("Value column [{$valueField}] is not available for charts.");
+                }
+            }
         }
 
         $period = $options['period'] ?? 'day';
@@ -46,45 +56,82 @@ final class ChartDataGenerator
         $maxPie = (int) ($options['max_categories_for_pie'] ?? 12);
 
         $query = $modelClass::query();
+        $mainTable = (new $modelClass())->getTable();
+
+        // Joindre la relation si nécessaire
+        $isRelation = $valueField !== null && str_contains($valueField, '.');
+        $valueFieldToAggregate = $valueField;
+        
+        if ($isRelation) {
+            [$relationName, $relField] = explode('.', $valueField, 2);
+            $instance = new $modelClass();
+            $relation = $instance->{$relationName}();
+            $relatedModel = $relation->getRelated();
+            $relatedTable = $relatedModel->getTable();
+
+            if ($relation instanceof \Illuminate\Database\Eloquent\Relations\HasMany || $relation instanceof \Illuminate\Database\Eloquent\Relations\HasOne) {
+                $foreignKey = $relation->getForeignKeyName();
+                $localKey = $relation->getLocalKeyName();
+                $query->join($relatedTable, "{$mainTable}.{$localKey}", '=', "{$relatedTable}.{$foreignKey}");
+            } elseif ($relation instanceof \Illuminate\Database\Eloquent\Relations\BelongsTo) {
+                $foreignKey = $relation->getForeignKeyName();
+                $ownerKey = $relation->getOwnerKeyName();
+                $query->join($relatedTable, "{$mainTable}.{$foreignKey}", '=', "{$relatedTable}.{$ownerKey}");
+            } else {
+                throw new \InvalidArgumentException("Unsupported relation type for charts.");
+            }
+
+            // Éviter l'ambiguïté sur les colonnes SQL
+            $valueFieldToAggregate = "{$relatedTable}.{$relField}";
+        } else {
+            $valueFieldToAggregate = $valueField ? "{$mainTable}.{$valueField}" : null;
+        }
+
+        $dateColumnPrefixed = "{$mainTable}.{$dateColumn}";
 
         if ($from !== null) {
-            $query->where($dateColumn, '>=', Carbon::parse($from));
+            $query->where($dateColumnPrefixed, '>=', Carbon::parse($from));
         }
 
         if ($to !== null) {
-            $query->where($dateColumn, '<=', Carbon::parse($to));
+            $query->where($dateColumnPrefixed, '<=', Carbon::parse($to));
         }
 
         // If no value field -> count per period using SQL aggregation
         if ($valueField === null) {
-            $rows = $this->aggregateCountByPeriod($query, $dateColumn, $period);
+            $rows = $this->aggregateCountByPeriod($query, $dateColumnPrefixed, $period);
         } else {
-            // detect numeric column using a quick sample (DB-level detection could be added)
+            // detect numeric column using a quick sample
             $numericSample = false;
             try {
                 $sampleQuery = clone $query;
-                $sample = $sampleQuery->limit(50)->pluck($valueField)->filter()->values();
+                $sample = $sampleQuery->limit(50)->pluck($valueFieldToAggregate)->filter()->values();
                 $numericSample = $sample->filter(fn($v) => is_numeric($v))->count() > 0;
             } catch (\Throwable) {
-                // column may not exist or pluck failed - treat as non-numeric sample
                 $numericSample = false;
             }
 
             // If percentile or histogram requested, we need raw values per period
             if (! empty($options['percentile']) || ! empty($options['histogram'])) {
-                $rows = $query->get()->map(function ($item) use ($dateColumn, $valueField) {
+                $dateKey = $dateColumn; // Nom d'attribut PHP non préfixé
+                $valueKey = $isRelation ? $relField : $valueField;
+
+                $rows = $query->get()->map(function ($item) use ($dateKey, $valueKey) {
                     return [
-                        'date' => Carbon::parse($item->{$dateColumn}),
-                        'value' => $item->{$valueField},
+                        'date' => Carbon::parse($item->{$dateKey}),
+                        'value' => $item->{$valueKey},
                     ];
                 });
             } elseif ($numericSample) {
-                $rows = $this->aggregateSumByPeriod($query, $dateColumn, $valueField, $period);
+                $rows = $this->aggregateSumByPeriod($query, $dateColumnPrefixed, $valueFieldToAggregate, $period);
             } else {
-                $rows = $query->get()->map(function ($item) use ($dateColumn, $valueField) {
+                $dateKey = $dateColumn;
+                $valueKey = $isRelation ? $relField : $valueField;
+
+                $rows = $query->get()->map(function ($item) use ($dateKey, $valueKey) {
                     return [
-                        'date' => Carbon::parse($item->{$dateColumn}),
-                        'value' => $item->{$valueField},
+                        'date' => Carbon::parse($item->{$dateKey}),
+                        'value' => $item->{$valueKey},
                     ];
                 });
             }
@@ -212,8 +259,9 @@ final class ChartDataGenerator
         }
 
         // Fallback to PHP grouping
-        $rows = $query->get()->map(function ($item) use ($dateColumn) {
-            return [ 'date' => Carbon::parse($item->{$dateColumn}) ];
+        $dateKey = str_contains($dateColumn, '.') ? last(explode('.', $dateColumn)) : $dateColumn;
+        $rows = $query->get()->map(function ($item) use ($dateKey) {
+            return [ 'date' => Carbon::parse($item->{$dateKey}) ];
         });
 
         return $this->groupByPeriod($rows, $period);
@@ -243,10 +291,13 @@ final class ChartDataGenerator
             return $rows->pluck('s', 'bucket')->all();
         }
 
-        $rows = $query->get()->map(function ($item) use ($dateColumn, $valueField) {
+        $dateKey = str_contains($dateColumn, '.') ? last(explode('.', $dateColumn)) : $dateColumn;
+        $valueKey = str_contains($valueField, '.') ? last(explode('.', $valueField)) : $valueField;
+
+        $rows = $query->get()->map(function ($item) use ($dateKey, $valueKey) {
             return [
-                'date' => Carbon::parse($item->{$dateColumn}),
-                'value' => $item->{$valueField},
+                'date' => Carbon::parse($item->{$dateKey}),
+                'value' => $item->{$valueKey},
             ];
         });
 

@@ -40,6 +40,7 @@ return [
         'charts' => true,
         'tables' => true,
         'relationship_discovery' => true,
+        'api_stats' => env('STATISTY_API_STATS', true),
     ],
 
     'allow_unlisted_models' => env('STATISTY_ALLOW_UNLISTED_MODELS', true),

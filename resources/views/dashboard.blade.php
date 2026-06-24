@@ -107,6 +107,18 @@
                     </div>
                     <div class="workflow-card-body">
                         <p class="workflow-card-class">{{ $model['class'] }}</p>
+                        @if(!empty($model['metrics_list']) && count($model['metrics_list']) > 1)
+                            <div class="workflow-card-metrics-wrapper" style="margin-top: 12px;">
+                                <span style="font-size:10px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:6px;">Métriques Détectées :</span>
+                                <div style="display:flex; flex-wrap:wrap; gap:5px;">
+                                    @foreach($model['metrics_list'] as $m)
+                                        <span class="workflow-metric-badge" style="font-size:10px; font-weight:600; padding:2px 8px; border-radius:12px; background:rgba(255, 45, 32, 0.05); color:#ff2d20; border:1px solid rgba(255, 45, 32, 0.15);">
+                                            {{ $m }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
                     </div>
                     <div class="workflow-card-actions">
                         <a href="{{ $model['metrics_url'] }}" target="_blank" class="action-api-link" title="Metrics API">

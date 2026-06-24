@@ -19,6 +19,14 @@ final class EnsureStatistyAuthorized
             return ApiError::response('unauthorized', 403);
         }
 
+        if (config('statisty.features.api_stats', true)) {
+            try {
+                \Illuminate\Support\Facades\Cache::increment('statisty:total_requests_executed');
+            } catch (\Throwable $e) {
+                // Ignore cache failures
+            }
+        }
+
         return $next($request);
     }
 }

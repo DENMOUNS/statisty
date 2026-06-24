@@ -35,9 +35,9 @@ if ((bool) ($webRoutes['enabled'] ?? true)) {
         ->name('statisty.web.')
         ->group(function () {
             Route::get('dashboard', [\Statisty\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
-            Route::get('workflow/{model}', [\Statisty\Http\Controllers\DashboardController::class, 'workflow'])->name('workflow');
-            Route::get('health', [\Statisty\Http\Controllers\DashboardController::class, 'health'])->name('health');
-            Route::get('logs', [\Statisty\Http\Controllers\DashboardController::class, 'logs'])->name('logs');
-            Route::get('jobs', [\Statisty\Http\Controllers\DashboardController::class, 'jobs'])->name('jobs');
+            Route::get('workflow/{model}', [\Statisty\Http\Controllers\WorkflowController::class, 'workflow'])->name('workflow');
+            Route::get('health', [\Statisty\Http\Controllers\HealthController::class, 'health'])->name('health');
+            Route::get('logs', [\Statisty\Http\Controllers\LogsController::class, 'logs'])->name('logs');
+            Route::get('jobs', [\Statisty\Http\Controllers\JobsController::class, 'jobs'])->name('jobs');
         });
 }

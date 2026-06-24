@@ -11,6 +11,12 @@ final class ModelSchema
 {
     private const DEFAULT_SENSITIVE = ['password', 'remember_token', 'tokens', 'api_token', 'token', 'secret', 'secrets'];
 
+    /** Noms de colonnes considérés comme "statut" (valeurs catégorielles). */
+    private const STATUS_KEYWORDS = ['status', 'state', 'stage', 'phase', 'type', 'kind', 'category', 'role', 'priority', 'level'];
+
+    /** Noms de colonnes considérés comme numériques agrégables. */
+    private const NUMERIC_KEYWORDS = ['amount', 'total', 'price', 'quantity', 'value', 'points', 'sum', 'score', 'total_amount', 'subtotal', 'revenue', 'cost', 'fee', 'tax', 'discount', 'weight', 'balance', 'salary', 'rate', 'count'];
+
     public static function isQueryableModel(string $modelClass): bool
     {
         return class_exists($modelClass)
@@ -139,5 +145,41 @@ final class ModelSchema
         }
 
         return self::isVisibleColumn($relationInstance->getRelated(), $column);
+    }
+
+    /**
+     * Retourne les colonnes visibles dont le nom correspond à un champ "statut" (catégoriel).
+     * Ex: status, state, type, stage, phase, kind, category, role, priority, level.
+     */
+    public static function semanticStatusColumns(string|Model $model): array
+    {
+        $visible = self::visibleColumns($model);
+
+        return array_values(array_filter($visible, function (string $col): bool {
+            return in_array(strtolower($col), self::STATUS_KEYWORDS, true)
+                || str_ends_with(strtolower($col), '_status')
+                || str_ends_with(strtolower($col), '_state')
+                || str_ends_with(strtolower($col), '_type')
+                || str_ends_with(strtolower($col), '_stage');
+        }));
+    }
+
+    /**
+     * Retourne les colonnes visibles dont le nom correspond à un champ numérique agrégable.
+     * Ex: amount, total, price, quantity, value, etc.
+     */
+    public static function semanticNumericColumns(string|Model $model): array
+    {
+        $visible = self::visibleColumns($model);
+
+        return array_values(array_filter($visible, function (string $col): bool {
+            $lower = strtolower($col);
+            foreach (self::NUMERIC_KEYWORDS as $keyword) {
+                if ($lower === $keyword || str_contains($lower, $keyword)) {
+                    return true;
+                }
+            }
+            return false;
+        }));
     }
 }
