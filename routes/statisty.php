@@ -40,5 +40,15 @@ if ((bool) ($webRoutes['enabled'] ?? true)) {
             Route::get('logs', [\Statisty\Http\Controllers\LogsController::class, 'logs'])->name('logs');
             Route::get('jobs', [\Statisty\Http\Controllers\JobsController::class, 'jobs'])->name('jobs');
             Route::get('docs', [\Statisty\Http\Controllers\DocController::class, 'index'])->name('docs');
+            
+            // Nouvelles fonctionnalités
+            Route::get('commands', [\Statisty\Http\Controllers\CommandsController::class, 'index'])->name('commands');
+            Route::post('commands', [\Statisty\Http\Controllers\CommandsController::class, 'execute'])->name('commands.execute');
+            Route::get('schedule', [\Statisty\Http\Controllers\ScheduleController::class, 'index'])->name('schedule');
+            Route::get('cache', [\Statisty\Http\Controllers\CacheController::class, 'index'])->name('cache');
+            Route::post('cache/clear', [\Statisty\Http\Controllers\CacheController::class, 'clear'])->name('cache.clear');
+            Route::get('events', [\Statisty\Http\Controllers\EventsController::class, 'index'])->name('events');
+            Route::get('exceptions', [\Statisty\Http\Controllers\ExceptionsController::class, 'index'])->name('exceptions');
+            Route::get('models', [\Statisty\Http\Controllers\ModelsController::class, 'index'])->name('models');
         });
 }
