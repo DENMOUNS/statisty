@@ -25,13 +25,14 @@
 
 1. Installez le package via Composer :
 ```bash
-composer require denmouns/statisty
+composer require ld/statisty
 ```
 
 2. Publiez les assets (CSS, JS, Images) et le fichier de configuration :
 ```bash
 php artisan vendor:publish --tag=statisty-config
 php artisan vendor:publish --tag=statisty-assets
+php artisan vendor:publish --tag=statisty-views         
 ```
 
 *(Optionnel)* Pour de meilleures performances en production, lancez la commande de découverte afin de cacher la structure de vos modèles :
@@ -50,7 +51,7 @@ http://votre-app.test/web/statisty/dashboard
 ```
 
 Sur cette page, vous retrouverez :
-- Une **Heatmap d'activité** de votre application sur les 12 dernières semaines.
+- Une **Heatmap d'activité** de votre application.
 - Les **KPIs globaux** de vos modèles.
 - Un accès rapide aux **Workflows** de chaque modèle configuré.
 
@@ -98,11 +99,81 @@ Rendez-vous dans la clé `'models'` de `config/statisty.php` :
             'orderItems' => ['columns' => ['id', 'product_id', 'quantity', 'price']],
         ],
     ],
-    
+
     // Vous pouvez désactiver un modèle sans le supprimer du fichier
     App\Models\Invoice::class => [
         'enabled' => false, 
     ],
+
+    //Exemple plus concret
+
+    'models' => [
+        App\Models\User::class => [
+            'enabled' => true,
+            'columns' => ['id', 'name', 'email', 'created_at'],
+            'relations' => [
+                'orders' => ['columns' => ['id', 'total_amount', 'status']],
+                'posts' => ['columns' => ['id', 'title', 'status']],
+                'comments' => ['columns' => ['id', 'content']],
+            ],
+        ],
+        App\Models\Category::class => [
+            'enabled' => true,
+            'columns' => ['id', 'name', 'slug', 'description', 'created_at'],
+            'relations' => [
+                'products' => ['columns' => ['id', 'name', 'price', 'stock']],
+            ],
+        ],
+        App\Models\Product::class => [
+            'enabled' => true,
+            'columns' => ['id', 'category_id', 'name', 'slug', 'description', 'price', 'stock', 'status', 'created_at'],
+            'relations' => [
+                'category' => ['columns' => ['id', 'name']],
+                'orderItems' => ['columns' => ['id', 'order_id', 'quantity', 'price']],
+            ],
+        ],
+        App\Models\Order::class => [
+            'enabled' => true,
+            'columns' => ['id', 'user_id', 'total_amount', 'status', 'created_at'],
+            'relations' => [
+                'user' => ['columns' => ['id', 'name', 'email']],
+                'orderItems' => ['columns' => ['id', 'product_id', 'quantity', 'price']],
+            ],
+        ],
+        App\Models\OrderItem::class => [
+            'enabled' => true,
+            'columns' => ['id', 'order_id', 'product_id', 'quantity', 'price', 'created_at'],
+            'relations' => [
+                'order' => ['columns' => ['id', 'total_amount', 'status']],
+                'product' => ['columns' => ['id', 'name', 'price']],
+            ],
+        ],
+        App\Models\Blog::class => [
+            'enabled' => false,
+            'columns' => ['id', 'name', 'slug', 'description', 'created_at'],
+            'relations' => [
+                'posts' => ['columns' => ['id', 'title', 'status']],
+            ],
+        ],
+        App\Models\Post::class => [
+            'enabled' => false,
+            'columns' => ['id', 'blog_id', 'user_id', 'title', 'slug', 'content', 'status', 'created_at'],
+            'relations' => [
+                'blog' => ['columns' => ['id', 'name']],
+                'author' => ['columns' => ['id', 'name', 'email']],
+                'comments' => ['columns' => ['id', 'content']],
+            ],
+        ],
+        App\Models\Comment::class => [
+            'enabled' => false,
+            'columns' => ['id', 'post_id', 'user_id', 'content', 'created_at'],
+            'relations' => [
+                'post' => ['columns' => ['id', 'title']],
+                'user' => ['columns' => ['id', 'name', 'email']],
+            ],
+        ],
+    ],
+
 ],
 ```
 
