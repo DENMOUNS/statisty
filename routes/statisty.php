@@ -40,17 +40,5 @@ if ((bool) ($webRoutes['enabled'] ?? true)) {
             Route::get('logs', [\Statisty\Http\Controllers\LogsController::class, 'logs'])->name('logs');
             Route::get('jobs', [\Statisty\Http\Controllers\JobsController::class, 'jobs'])->name('jobs');
             Route::get('docs', [\Statisty\Http\Controllers\DocController::class, 'index'])->name('docs');
-            
-            // Nouvelles fonctionnalités
-            Route::get('commands', [\Statisty\Http\Controllers\CommandsController::class, 'index'])->name('commands');
-            Route::post('commands', [\Statisty\Http\Controllers\CommandsController::class, 'execute'])->name('commands.execute');
-            Route::get('schedule', [\Statisty\Http\Controllers\ScheduleController::class, 'index'])->name('schedule');
-            Route::post('schedule', [\Statisty\Http\Controllers\ScheduleController::class, 'store'])->name('schedule.store');
-            Route::get('events', [\Statisty\Http\Controllers\EventsController::class, 'index'])->name('events');
-            Route::get('exceptions', [\Statisty\Http\Controllers\ExceptionsController::class, 'index'])->name('exceptions');
-            Route::get('models', [\Statisty\Http\Controllers\ModelsController::class, 'index'])->name('models');
-            Route::post('models', [\Statisty\Http\Controllers\ModelsController::class, 'store'])->name('models.store');
-            Route::post('models/alter', [\Statisty\Http\Controllers\ModelsController::class, 'alter'])->name('models.alter');
-            Route::post('models/modify', [\Statisty\Http\Controllers\ModelsController::class, 'modifyModel'])->name('models.modify');
         });
 }

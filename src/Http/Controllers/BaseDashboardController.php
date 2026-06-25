@@ -40,14 +40,9 @@ abstract class BaseDashboardController extends Controller
             'activePage' => $active,
             'statistyNav' => [
                 ['key' => 'dashboard', 'label' => 'Dashboard', 'url' => url($prefix . '/dashboard')],
-                ['key' => 'models', 'label' => 'Models', 'url' => url($prefix . '/models')],
                 ['key' => 'health', 'label' => 'Health', 'url' => url($prefix . '/health')],
                 ['key' => 'logs', 'label' => 'Logs', 'url' => url($prefix . '/logs')],
-                ['key' => 'exceptions', 'label' => 'Exceptions', 'url' => url($prefix . '/exceptions')],
                 ['key' => 'jobs', 'label' => 'Jobs', 'url' => url($prefix . '/jobs')],
-                ['key' => 'schedule', 'label' => 'Schedule', 'url' => url($prefix . '/schedule')],
-                ['key' => 'commands', 'label' => 'Commands', 'url' => url($prefix . '/commands')],
-                ['key' => 'events', 'label' => 'Events', 'url' => url($prefix . '/events')],
                 ['key' => 'docs', 'label' => 'API Docs', 'url' => url($prefix . '/docs')],
             ],
             'sidebarWorkflows' => array_map(

@@ -87,8 +87,8 @@
             </nav>
 
             <div class="statisty-sidebar-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-light); margin-top: auto;">
-                <div style="display:flex; align-items:center; justify-content:space-between;">
-                    <span style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">Powered by Statisty</span>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap: 12px;">
+                    <img src="{{ asset('vendor/statisty/mascotte.png') }}" alt="Mascotte" style="height:32px; width:auto; display:block;" />
                     <span class="statisty-version-badge">v{{ $version ?? '1.0.0' }}</span>
                 </div>
             </div>
