@@ -149,14 +149,12 @@ Une fois dans Statisty, utilisez la barre latérale pour naviguer :
 
 ## 🗺️ Roadmap (Fonctionnalités à venir)
 
-Statisty a pour ambition de devenir le centre de contrôle absolu de votre application Laravel. Voici ce qui est prévu pour les prochaines versions :
+Statisty continue d'évoluer vers un tableau de bord Laravel toujours plus complet et intuitif. Les prochaines versions se concentreront sur :
 
-- **Commands :** Interface graphique pour lister et exécuter vos commandes Artisan directement depuis le navigateur.
-- **Schedule :** Visualisation des tâches planifiées (Cron) et historique d'exécution.
-- **Cache :** Gestionnaire de cache complet (statistiques de hit/miss, vidage sélectif par tag ou clé).
-- **Events :** Moniteur d'événements et de listeners en temps réel.
-- **Exceptions :** Suivi avancé des exceptions et erreurs applicatives (stack trace interactif).
-- **Models Global View :** Une vue globale de tous vos modèles (taille en base, compte total, relations orphelines).
+- Une meilleure expérience de navigation dans les workflows.
+- Des tables plus réactives avec filtrage avancé et export amélioré.
+- Des diagnostics plus précis pour la santé applicative.
+- Une documentation API encore plus riche et automatique.
 
 ---
 
