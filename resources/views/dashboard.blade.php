@@ -67,125 +67,291 @@
             </div>
         </div>
 
-        {{-- ── Grille des KPIs globaux ────────────────────────────────────────── --}}
-        <section class="statisty-kpi-grid" aria-label="Métriques globales">
-            @foreach($kpis as $kpi)
-                @php
-                    $val = $kpi->value ?? null;
-                    $st  = $kpi->status ?? 'pending';
-                @endphp
-                <article class="statisty-kpi">
-                    <div class="statisty-kpi-label">{{ $kpi->name }}</div>
-                    <div class="statisty-kpi-value">
-                        @if($st === 'ready')
-                            {{ is_numeric($val) ? number_format((float) $val) : $val }}
-                        @else
-                            <span style="font-size:20px; color: var(--text-secondary);">—</span>
-                        @endif
-                    </div>
-                    <div class="statisty-kpi-meta">
-                        <span class="statisty-status-badge status-{{ $st }}">{{ $st }}</span>
-                    </div>
-                </article>
-            @endforeach
+        <section class="statisty-heatmap-header" style="display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; align-items:flex-end; margin-top:32px;">
+            <div>
+                <h2 style="margin:0; font-size:16px; font-weight:700; color:var(--text-primary);">Activité Globale</h2>
+                <p style="margin:4px 0 0; font-size:12px; color:var(--text-secondary);">{{ $heatmapCaption }}</p>
+            </div>
+            <form id="heatmap-year-form" method="GET" style="display:flex; gap:10px; align-items:center;">
+                <label for="heatmapYear" style="font-size:12px; color:var(--text-secondary); font-weight:700;">Période :</label>
+                <select id="heatmapYear" name="year" onchange="this.form.submit()" style="padding:8px 10px; border:1px solid var(--border-light); border-radius:10px; background:#fff; color:var(--text-primary);">
+                    @foreach($heatmapYears as $yearValue => $yearLabel)
+                        <option value="{{ $yearValue }}" @if($selectedHeatmapYear === $yearValue) selected @endif>{{ $yearLabel }}</option>
+                    @endforeach
+                </select>
+            </form>
         </section>
 
         {{-- ── Heatmap d'activité globale ────────────────────────────────────────── --}}
-        @if(isset($heatmapData) && count($heatmapData) > 0)
         <section class="statisty-activity-heatmap" style="margin-top: 30px; margin-bottom: 30px; background: #fff; padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm);">
-            <div style="margin-bottom: 16px;">
-                <h2 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">Activité Globale</h2>
-                <p style="margin: 4px 0 0; font-size: 12px; color: var(--text-secondary);">Créations d'enregistrements sur les 12 dernières semaines</p>
-            </div>
-            <div id="hc-activity-heatmap" style="width:100%; height:180px;"></div>
+            <div id="hc-activity-heatmap" style="width:100%; height:260px;"></div>
+            <div id="heatmapEmptyMessage" style="display:none; padding: 28px 14px; text-align:center; color:var(--text-secondary); font-weight:600;">Aucune activité disponible pour cette période. Essayez de sélectionner une autre année ou changez la période.</div>
         </section>
+
+        <div id="dashboardApiModal" class="statisty-modal hidden">
+            <div class="statisty-modal-backdrop"></div>
+            <div class="statisty-modal-panel">
+                <header class="statisty-modal-header">
+                    <h2 id="dashboardApiModalTitle" class="statisty-modal-title">API</h2>
+                    <button type="button" id="dashboardApiModalClose" class="statisty-modal-close" aria-label="Fermer">×</button>
+                </header>
+                <div id="dashboardApiModalBody" class="statisty-modal-body"></div>
+            </div>
+        </div>
 
         <script>
         document.addEventListener('DOMContentLoaded', function () {
-            var rawData = @json($heatmapData);
-            
-            // Transformer pour Highcharts : x = semaine, y = jour, value = nombre
-            // rawData format: [weekIndex, dayOfWeekIso_Minus_1, count, dateStr]
-            
-            var maxValue = 0;
-            var hcData = rawData.map(function(item) {
-                var val = item[2];
-                if (val > maxValue) maxValue = val;
-                // Highcharts Heatmap expects y axis reversed by default if we want top to bottom, 
-                // but let's invert Y axis in chart options instead.
-                return {
-                    x: item[0],
-                    y: item[1],
-                    value: val,
-                    date: item[3]
-                };
+            var rawData = @json($heatmapData ?? []);
+            var apiModal = document.getElementById('dashboardApiModal');
+            var apiModalTitle = document.getElementById('dashboardApiModalTitle');
+            var apiModalBody = document.getElementById('dashboardApiModalBody');
+            var apiModalClose = document.getElementById('dashboardApiModalClose');
+            var heatmapContainer = document.getElementById('hc-activity-heatmap');
+            var heatmapEmptyMessage = document.getElementById('heatmapEmptyMessage');
+
+            function renderHeatmap() {
+                if (!rawData || rawData.length === 0) {
+                    heatmapContainer.style.display = 'none';
+                    heatmapEmptyMessage.style.display = 'block';
+                    return;
+                }
+
+                heatmapContainer.style.display = 'block';
+                heatmapEmptyMessage.style.display = 'none';
+
+                Highcharts.chart('hc-activity-heatmap', {
+                    chart: {
+                        type: 'heatmap',
+                        marginTop: 10,
+                        marginBottom: 20,
+                        plotBorderWidth: 0,
+                        backgroundColor: 'transparent',
+                        style: { fontFamily: 'Outfit, ui-sans-serif, sans-serif' }
+                    },
+                    title: { text: null },
+                    credits: { enabled: false },
+                    exporting: { enabled: false },
+                    xAxis: {
+                        visible: false,
+                    },
+                    yAxis: {
+                        categories: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+                        title: null,
+                        reversed: true,
+                        labels: { style: { fontSize: '10px', color: '#71717a' } },
+                        gridLineWidth: 0,
+                        lineWidth: 0
+                    },
+                    colorAxis: {
+                        min: 0,
+                        stops: [
+                            [0, '#f8fafc'],
+                            [0.1, '#fecaca'],
+                            [0.4, '#f87171'],
+                            [0.7, '#dc2626'],
+                            [1, '#991b1b']
+                        ]
+                    },
+                    legend: {
+                        align: 'right',
+                        layout: 'vertical',
+                        margin: 0,
+                        verticalAlign: 'top',
+                        y: 10,
+                        symbolHeight: 120,
+                        itemStyle: { fontSize: '10px', color: '#71717a' }
+                    },
+                    tooltip: {
+                        formatter: function () {
+                            return '<b>' + this.point.date + '</b><br/>' +
+                                this.point.value + ' enregistrement(s)';
+                        },
+                        backgroundColor: '#ffffff',
+                        borderColor: '#e4e4e7',
+                        borderRadius: 8,
+                        shadow: true
+                    },
+                    series: [{
+                        name: 'Activité',
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        data: rawData,
+                        dataLabels: {
+                            enabled: false
+                        }
+                    }]
+                });
+            }
+
+            renderHeatmap();
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            function formatApiValue(value) {
+                if (value === null || value === undefined) {
+                    return '';
+                }
+
+                if (typeof value === 'object') {
+                    return escapeHtml(JSON.stringify(value, null, 2));
+                }
+
+                return escapeHtml(value);
+            }
+
+            function showModal() {
+                apiModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function hideModal() {
+                apiModal.classList.add('hidden');
+                document.body.style.overflow = '';
+                apiModalBody.innerHTML = '';
+                if ($.fn.DataTable && $.fn.DataTable.isDataTable('#dashboardApiTable')) {
+                    $('#dashboardApiTable').DataTable().destroy();
+                }
+            }
+
+            apiModalClose.addEventListener('click', hideModal);
+            apiModal.querySelector('.statisty-modal-backdrop').addEventListener('click', hideModal);
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    hideModal();
+                }
             });
 
-            Highcharts.chart('hc-activity-heatmap', {
-                chart: {
-                    type: 'heatmap',
-                    marginTop: 10,
-                    marginBottom: 20,
-                    plotBorderWidth: 0,
-                    backgroundColor: 'transparent',
-                    style: { fontFamily: 'Outfit, ui-sans-serif, sans-serif' }
-                },
-                title: { text: null },
-                credits: { enabled: false },
-                exporting: { enabled: false },
-                xAxis: {
-                    visible: false, // hide weeks text, keep it simple like github
-                },
-                yAxis: {
-                    categories: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
-                    title: null,
-                    reversed: true, // Monday at top
-                    labels: { style: { fontSize: '10px', color: '#71717a' } },
-                    gridLineWidth: 0,
-                    lineWidth: 0
-                },
-                colorAxis: {
-                    min: 0,
-                    stops: [
-                        [0, '#f8fafc'], // very light empty
-                        [0.1, '#fecaca'], // very light red
-                        [0.4, '#f87171'], // red
-                        [0.7, '#dc2626'], // darker red
-                        [1, '#991b1b'] // dark red
-                    ]
-                },
-                legend: {
-                    align: 'right',
-                    layout: 'vertical',
-                    margin: 0,
-                    verticalAlign: 'top',
-                    y: 10,
-                    symbolHeight: 120,
-                    itemStyle: { fontSize: '10px', color: '#71717a' }
-                },
-                tooltip: {
-                    formatter: function () {
-                        return '<b>' + this.point.date + '</b><br/>' +
-                               this.point.value + ' enregistrement(s)';
-                    },
-                    backgroundColor: '#ffffff',
-                    borderColor: '#e4e4e7',
-                    borderRadius: 8,
-                    shadow: true
-                },
-                series: [{
-                    name: 'Activité',
-                    borderWidth: 2,
-                    borderColor: '#ffffff',
-                    data: hcData,
-                    dataLabels: {
-                        enabled: false
-                    }
-                }]
+            function renderMetricsModal(model, url, metricsList) {
+                apiModalTitle.textContent = model + ' — Metrics';
+                apiModalBody.innerHTML = '<div class="statisty-api-loading">Chargement des métriques...</div>';
+                showModal();
+
+                fetch(url, { headers: { 'Accept': 'application/json' } })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error('Erreur réseau');
+                        }
+                        return response.json();
+                    })
+                    .then(function (data) {
+                        var html = '<div class="dashboard-modal-section"><strong>Metrics détectées</strong><ul class="dashboard-metrics-list">';
+
+                        metricsList.forEach(function (metric) {
+                            html += '<li>' + escapeHtml(metric) + '</li>';
+                        });
+                        html += '</ul></div>';
+
+                        if (Array.isArray(data) && data.length > 0) {
+                            html += '<div class="dashboard-modal-section"><strong>Configuration API</strong><table class="dashboard-api-table"><thead><tr>';
+                            Object.keys(data[0]).forEach(function (key) {
+                                html += '<th>' + escapeHtml(key) + '</th>';
+                            });
+                            html += '</tr></thead><tbody>';
+
+                            data.forEach(function (item) {
+                                html += '<tr>';
+                                Object.values(item).forEach(function (value) {
+                                    html += '<td>' + formatApiValue(value) + '</td>';
+                                });
+                                html += '</tr>';
+                            });
+                            html += '</tbody></table></div>';
+                        } else if (data && typeof data === 'object') {
+                            html += '<div class="dashboard-modal-section"><strong>Résultat</strong><table class="dashboard-api-table dashboard-api-object"><tbody>';
+                            Object.keys(data).forEach(function (key) {
+                                html += '<tr><th>' + escapeHtml(key) + '</th><td>' + formatApiValue(data[key]) + '</td></tr>';
+                            });
+                            html += '</tbody></table></div>';
+                        } else {
+                            html += '<p>Aucune métrique paramétrée pour ce modèle.</p>';
+                        }
+
+                        apiModalBody.innerHTML = html;
+                    })
+                    .catch(function () {
+                        apiModalBody.innerHTML = '<p class="dashboard-api-error">Impossible de charger les métriques. Vérifiez votre connexion ou la configuration du modèle.</p>';
+                    });
+            }
+
+            function renderTableModal(model, url) {
+                apiModalTitle.textContent = model + ' — Table';
+                apiModalBody.innerHTML = '<div class="statisty-api-loading">Chargement des données du tableau...</div>';
+                showModal();
+
+                fetch(url + (url.includes('?') ? '&' : '?') + 'per_page=50', { headers: { 'Accept': 'application/json' } })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error('Erreur réseau');
+                        }
+                        return response.json();
+                    })
+                    .then(function (json) {
+                        var rows = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+                        if (rows.length === 0) {
+                            apiModalBody.innerHTML = '<p>Aucun enregistrement trouvé.</p>';
+                            return;
+                        }
+
+                        var columns = Object.keys(rows[0]).map(function (key) {
+                            return { title: key, data: key };
+                        });
+
+                        var tableMarkup = '<table id="dashboardApiTable" class="statisty-table display nowrap" style="width:100%"><thead><tr>';
+                        columns.forEach(function (col) {
+                            tableMarkup += '<th>' + escapeHtml(col.title) + '</th>';
+                        });
+                        tableMarkup += '</tr></thead><tbody>';
+
+                        rows.forEach(function (row) {
+                            tableMarkup += '<tr>';
+                            columns.forEach(function (col) {
+                                tableMarkup += '<td>' + formatApiValue(row[col.data]) + '</td>';
+                            });
+                            tableMarkup += '</tr>';
+                        });
+                        tableMarkup += '</tbody></table>';
+
+                        apiModalBody.innerHTML = '<div class="dashboard-modal-table-wrapper">' + tableMarkup + '</div>';
+
+                        if ($.fn.DataTable) {
+                            if ($.fn.DataTable.isDataTable('#dashboardApiTable')) {
+                                $('#dashboardApiTable').DataTable().destroy();
+                            }
+                            $('#dashboardApiTable').DataTable({
+                                dom: 'Bfrtip',
+                                buttons: ['copy', 'csv', 'excel', 'print'],
+                                responsive: true,
+                                pageLength: 10,
+                                order: [],
+                                autoWidth: false,
+                            });
+                        }
+                    })
+                    .catch(function () {
+                        apiModalBody.innerHTML = '<p class="dashboard-api-error">Impossible de charger le tableau. Vérifiez votre connexion ou la configuration du modèle.</p>';
+                    });
+            }
+
+            document.querySelectorAll('.dashboard-metrics-button').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    renderMetricsModal(btn.dataset.model, btn.dataset.url, JSON.parse(btn.dataset.metrics || '[]'));
+                });
+            });
+
+            document.querySelectorAll('.dashboard-table-button').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    renderTableModal(btn.dataset.model, btn.dataset.url);
+                });
             });
         });
         </script>
-        @endif
 
         {{-- ── Grille des Workflows ───────────────────────────────────────────── --}}
         <h2 class="section-title-accent">Workflows configurés</h2>
@@ -218,14 +384,14 @@
                         @endif
                     </div>
                     <div class="workflow-card-actions">
-                        <a href="{{ $model['metrics_url'] }}" target="_blank" class="action-api-link" title="Metrics API">
+                        <button type="button" class="action-api-link dashboard-metrics-button" data-url="{{ $model['metrics_url'] }}" data-model="{{ $model['label'] }}" data-metrics='@json($model['metrics_list'])' title="Metrics API">
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                             Metrics API
-                        </a>
-                        <a href="{{ $model['table_url'] }}" target="_blank" class="action-api-link" title="Table API">
+                        </button>
+                        <button type="button" class="action-api-link dashboard-table-button" data-url="{{ $model['table_url'] }}" data-model="{{ $model['label'] }}" title="Table API">
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
                             Table API
-                        </a>
+                        </button>
                     </div>
                     <div class="workflow-card-footer">
                         <a href="{{ url(trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/') . '/workflow/' . str_replace('\\', '%5C', $model['class'])) }}" class="explore-btn">
@@ -278,5 +444,90 @@
             text-decoration:none; transition:var(--transition-fast);
         }
         .pill-link:hover { background:var(--color-primary); color:#fff; }
+
+        .action-api-link {
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            padding:10px 14px;
+            border-radius:999px;
+            border:1px solid var(--border-light);
+            background:#f8fafc;
+            color:var(--text-primary);
+            cursor:pointer;
+            font-size:13px;
+            transition: all 0.15s ease;
+        }
+        .action-api-link:hover {
+            background:#fff;
+            border-color:#e5e7eb;
+            transform:translateY(-1px);
+        }
+
+        .statisty-modal.hidden { display:none; }
+        .statisty-modal {
+            position:fixed;
+            inset:0;
+            z-index:1200;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:24px;
+        }
+        .statisty-modal-backdrop {
+            position:absolute;
+            inset:0;
+            background:rgba(15,23,42,0.55);
+            backdrop-filter: blur(4px);
+        }
+        .statisty-modal-panel {
+            position:relative;
+            width:min(1100px, 100%);
+            max-height:min(90vh, 900px);
+            overflow:hidden;
+            background:#ffffff;
+            border-radius:24px;
+            box-shadow:0 32px 80px rgba(15,23,42,0.18);
+            z-index:10;
+            display:flex;
+            flex-direction:column;
+        }
+        .statisty-modal-header {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:18px 22px;
+            border-bottom:1px solid #e5e7eb;
+        }
+        .statisty-modal-title {
+            margin:0;
+            font-size:18px;
+            font-weight:700;
+            color:var(--text-primary);
+        }
+        .statisty-modal-close {
+            border:none;
+            background:transparent;
+            color:var(--text-secondary);
+            font-size:24px;
+            cursor:pointer;
+            line-height:1;
+            padding:0;
+        }
+        .statisty-modal-body {
+            padding:20px 22px 24px;
+            overflow:auto;
+        }
+        .dashboard-modal-section { margin-bottom:24px; }
+        .dashboard-metrics-list { margin:12px 0 0 0; padding-left:18px; color:var(--text-primary); }
+        .dashboard-metrics-list li { margin-bottom:8px; }
+        .dashboard-api-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .dashboard-api-table th,
+        .dashboard-api-table td { padding:10px 12px; border:1px solid #e5e7eb; text-align:left; vertical-align:top; }
+        .dashboard-api-table th { background:#f8fafc; color:var(--text-secondary); font-weight:700; }
+        .dashboard-api-object th { width:210px; }
+        .dashboard-api-error { color:#b91c1c; font-weight:700; }
+        .dashboard-api-loading { color:var(--text-secondary); font-style:italic; }
+
     </style>
 @endsection
