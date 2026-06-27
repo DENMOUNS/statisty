@@ -3,22 +3,22 @@
 @section('content')
     <header class="statisty-content-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
         <div>
-            <h1>API Documentation</h1>
-            <p class="statisty-muted">Génération automatique de la documentation de vos routes API en lisant le code de l'application.</p>
-        </div>
-        <div>
-            <button id="downloadMarkdownBtn" class="statisty-btn-primary" style="display:flex; align-items:center; gap:8px;">
-                <span>💾 Télécharger en Markdown</span>
-            </button>
+            <h1>Documentation des routes</h1>
+            <p class="statisty-muted">Affichez vos routes Web et générez la documentation API avec export Markdown.</p>
         </div>
     </header>
+
+    <div class="statisty-doc-tabs" role="tablist" style="margin-top:16px; gap:10px; display:flex; flex-wrap:wrap;">
+        <button type="button" class="statisty-doc-tab active" data-tab="webRoutesTab">Web</button>
+        <button type="button" class="statisty-doc-tab" data-tab="apiRoutesTab">API</button>
+    </div>
 
     <div class="statisty-doc-layout">
         <!-- Top bar search filters -->
         <div class="statisty-doc-filters">
             <div class="statisty-search-wrapper" style="flex: 1;">
                 <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" id="apiDocSearch" placeholder="Rechercher une route (ex: /api/users, GET, UserController)..." aria-label="Recherche API">
+                <input type="text" id="apiDocSearch" placeholder="Rechercher une route (ex: /users, GET, UserController)..." aria-label="Recherche de routes">
             </div>
             <div class="statisty-filters-group">
                 <select id="apiMethodFilter" aria-label="Filtrer par méthode HTTP">
@@ -32,149 +32,225 @@
             </div>
         </div>
 
-        @if(empty($apiDocs))
+        @if(empty($webRoutes) && empty($apiDocs))
             <section class="statisty-empty" style="margin-top:24px;">
-                <h2>Aucune route API détectée</h2>
+                <h2>Aucune route détectée</h2>
                 <p>Les routes de Statisty et du framework sont ignorées. Créez des routes dans <code>routes/api.php</code> ou <code>routes/web.php</code> pour générer la documentation.</p>
             </section>
         @else
-            <!-- API Routes list Accordion -->
-            <div class="statisty-doc-entries" id="apiDocContainer" style="margin-top:20px; display:flex; flex-direction:column; gap:16px;">
-                @foreach($apiDocs as $index => $route)
-                    @php
-                        $primaryMethod = count($route['methods']) > 0 ? $route['methods'][0] : 'GET';
-                    @endphp
-                    <article class="statisty-doc-entry" data-uri="{{ strtolower($route['uri']) }}" data-methods="{{ implode(',', $route['methods']) }}" data-action="{{ strtolower($route['action']) }}" data-desc="{{ strtolower($route['description']) }}">
-                        <!-- Header Accordion header -->
-                        <div class="statisty-doc-header" onclick="toggleAccordion('doc-body-{{ $index }}', this)">
-                            <div class="statisty-doc-title">
-                                <div class="methods-badges">
-                                    @foreach($route['methods'] as $m)
-                                        <span class="method-badge method-{{ strtolower($m) }}">{{ $m }}</span>
-                                    @endforeach
-                                </div>
-                                <span class="route-uri">{{ $route['uri'] }}</span>
-                                @if($route['is_deprecated'])
-                                    <span class="deprecated-badge">DEPRECATED</span>
-                                @endif
-                            </div>
-                            <div style="display:flex; align-items:center; gap:12px;">
-                                <span class="route-desc-short">{{ Str::limit($route['description'], 60) }}</span>
-                                <span class="accordion-arrow">▼</span>
-                            </div>
-                        </div>
-
-                        <!-- Body Accordion body -->
-                        <div class="statisty-doc-body" id="doc-body-{{ $index }}" style="display: none;">
-                            <div class="statisty-doc-section">
-                                <h3>Description</h3>
-                                <p class="route-description-full">{{ $route['description'] }}</p>
-                            </div>
-
-                            <div class="statisty-doc-grid">
-                                <div>
-                                    <h3>Informations</h3>
-                                    <table class="statisty-table-mini">
-                                        <tr>
-                                            <th>Nom de la route</th>
-                                            <td><code>{{ $route['name'] ?: 'N/A' }}</code></td>
-                                        </tr>
-                                        <tr>
-                                            <th>Action contrôleur</th>
-                                            <td><code>{{ $route['action'] }}</code></td>
-                                        </tr>
-                                        <tr>
-                                            <th>Middlewares</th>
-                                            <td>
-                                                <div class="middleware-tags">
-                                                    @forelse($route['middleware'] as $mw)
-                                                        <span class="mw-tag">{{ $mw }}</span>
-                                                    @empty
-                                                        <span class="statisty-muted" style="font-size:11px;">Aucun</span>
-                                                    @endforelse
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        @if($route['response_type'])
-                                            <tr>
-                                                <th>Type de retour</th>
-                                                <td><span class="response-type-badge">{{ $route['response_type'] }}</span></td>
-                                            </tr>
-                                        @endif
-                                    </table>
-                                </div>
-
-                                @if(!empty($route['params']))
-                                    <div>
-                                        <h3>Paramètres d'URL</h3>
-                                        <table class="statisty-table-mini">
-                                            <thead>
-                                                <tr>
-                                                    <th>Paramètre</th>
-                                                    <th>Type</th>
-                                                    <th>Obligatoire</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @foreach($route['params'] as $p)
-                                                    <tr>
-                                                        <td><code>{{ $p['name'] }}</code></td>
-                                                        <td>{{ $p['type'] }}</td>
-                                                        <td>
-                                                            @if($p['required'])
-                                                                <span class="req-badge req-true">Oui</span>
-                                                            @else
-                                                                <span class="req-badge req-false">Non</span>
-                                                            @endif
-                                                        </td>
-                                                    </tr>
+            <div id="webRoutesTab" class="statisty-doc-tab-panel">
+                @if(empty($webRoutes))
+                    <section class="statisty-empty" style="margin-top:24px;">
+                        <h2>Aucune route Web détectée</h2>
+                        <p>Aucune route Web n'a été trouvée. Vérifiez votre configuration de fichier de route ou vos groupes de middleware.</p>
+                    </section>
+                @else
+                    <section style="margin-top:16px;">
+                        <h2>Routes Web détectées</h2>
+                        <p class="statisty-muted">Liste des routes Web exposées hors de l'API.</p>
+                    </section>
+                    <div class="statisty-table-wrapper" style="margin-top:16px; overflow:auto;">
+                        <table class="statisty-table" id="webRoutesTable" style="width:100%; min-width:900px;">
+                            <thead>
+                                <tr>
+                                    <th>Méthodes</th>
+                                    <th>URI</th>
+                                    <th>Nom</th>
+                                    <th>Action</th>
+                                    <th>Middlewares</th>
+                                    <th>Origine</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($webRoutes as $route)
+                                    <tr class="statisty-route-entry" data-uri="{{ strtolower($route['uri']) }}" data-methods="{{ implode(',', $route['methods']) }}" data-action="{{ strtolower($route['action']) }}" data-desc="{{ strtolower($route['description']) }}">
+                                        <td>
+                                            <div class="methods-badges">
+                                                @foreach($route['methods'] as $m)
+                                                    <span class="method-badge method-{{ strtolower($m) }}">{{ $m }}</span>
                                                 @endforeach
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                @endif
-                            </div>
+                                            </div>
+                                        </td>
+                                        <td><code>{{ $route['uri'] }}</code></td>
+                                        <td><code>{{ $route['name'] ?: 'N/A' }}</code></td>
+                                        <td><code>{{ $route['action'] }}</code></td>
+                                        <td>
+                                            <div class="middleware-tags">
+                                                @forelse($route['middleware'] as $mw)
+                                                    <span class="mw-tag">{{ $mw }}</span>
+                                                @empty
+                                                    <span class="statisty-muted" style="font-size:11px;">Aucun</span>
+                                                @endforelse
+                                            </div>
+                                        </td>
+                                        <td><span class="route-source">{{ $route['source_hint'] }}</span></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
+            </div>
 
-                            @if(!empty($route['validation_rules']))
-                                <div class="statisty-doc-section" style="margin-top:16px;">
-                                    <h3>Structure de Requête (Règles de validation)</h3>
-                                    <table class="statisty-table-mini">
-                                        <thead>
-                                            <tr>
-                                                <th>Champ</th>
-                                                <th>Règles</th>
-                                                <th>Requis</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach($route['validation_rules'] as $rule)
+            <div id="apiRoutesTab" class="statisty-doc-tab-panel hidden">
+                <div class="statisty-doc-panel-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+                    <div>
+                        <h2>API Documentation</h2>
+                        <p class="statisty-muted">Générez la documentation de vos routes API et exportez-la en Markdown.</p>
+                    </div>
+                    <button id="downloadMarkdownBtn" class="statisty-btn-primary" style="display:flex; align-items:center; gap:8px;">
+                        <span>💾 Télécharger en Markdown</span>
+                    </button>
+                </div>
+
+                @if(empty($apiDocs))
+                    <section class="statisty-empty" style="margin-top:24px;">
+                        <h2>Aucune route API détectée</h2>
+                        <p>Les routes de Statisty et du framework sont ignorées. Créez des routes dans <code>routes/api.php</code> ou <code>routes/web.php</code> pour générer la documentation.</p>
+                    </section>
+                @else
+                    <div class="statisty-doc-entries" id="apiDocContainer" style="margin-top:20px; display:flex; flex-direction:column; gap:16px;">
+                        @foreach($apiDocs as $index => $route)
+                            @php
+                                $primaryMethod = count($route['methods']) > 0 ? $route['methods'][0] : 'GET';
+                            @endphp
+                            <article class="statisty-doc-entry" data-uri="{{ strtolower($route['uri']) }}" data-methods="{{ implode(',', $route['methods']) }}" data-action="{{ strtolower($route['action']) }}" data-desc="{{ strtolower($route['description']) }}">
+                                <!-- Header Accordion header -->
+                                <div class="statisty-doc-header" onclick="toggleAccordion('doc-body-{{ $index }}', this)">
+                                    <div class="statisty-doc-title">
+                                        <div class="methods-badges">
+                                            @foreach($route['methods'] as $m)
+                                                <span class="method-badge method-{{ strtolower($m) }}">{{ $m }}</span>
+                                            @endforeach
+                                        </div>
+                                        <span class="route-uri">{{ $route['uri'] }}</span>
+                                        @if($route['is_deprecated'])
+                                            <span class="deprecated-badge">DEPRECATED</span>
+                                        @endif
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:12px;">
+                                        <span class="route-desc-short">{{ Str::limit($route['description'], 60) }}</span>
+                                        <span class="accordion-arrow">▼</span>
+                                    </div>
+                                </div>
+
+                                <!-- Body Accordion body -->
+                                <div class="statisty-doc-body" id="doc-body-{{ $index }}" style="display: none;">
+                                    <div class="statisty-doc-section">
+                                        <h3>Description</h3>
+                                        <p class="route-description-full">{{ $route['description'] }}</p>
+                                    </div>
+
+                                    <div class="statisty-doc-grid">
+                                        <div>
+                                            <h3>Informations</h3>
+                                            <table class="statisty-table-mini">
                                                 <tr>
-                                                    <td><strong>{{ $rule['field'] }}</strong></td>
-                                                    <td><code>{{ $rule['rules'] }}</code></td>
+                                                    <th>Nom de la route</th>
+                                                    <td><code>{{ $route['name'] ?: 'N/A' }}</code></td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Action contrôleur</th>
+                                                    <td><code>{{ $route['action'] }}</code></td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Middlewares</th>
                                                     <td>
-                                                        @if($rule['required'])
-                                                            <span class="req-badge req-true">Requis</span>
-                                                        @else
-                                                            <span class="req-badge req-false">Optionnel</span>
-                                                        @endif
+                                                        <div class="middleware-tags">
+                                                            @forelse($route['middleware'] as $mw)
+                                                                <span class="mw-tag">{{ $mw }}</span>
+                                                            @empty
+                                                                <span class="statisty-muted" style="font-size:11px;">Aucun</span>
+                                                            @endforelse
+                                                        </div>
                                                     </td>
                                                 </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                </div>
-                            @endif
+                                                <tr>
+                                                    <th>Origine</th>
+                                                    <td><span class="route-source">{{ $route['source_hint'] }}</span></td>
+                                                </tr>
+                                                @if($route['response_type'])
+                                                    <tr>
+                                                        <th>Type de retour</th>
+                                                        <td><span class="response-type-badge">{{ $route['response_type'] }}</span></td>
+                                                    </tr>
+                                                @endif
+                                            </table>
+                                        </div>
 
-                            <div class="statisty-doc-section" style="margin-top:16px; border-top: 1px solid var(--border-light); padding-top:14px;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <h4 style="margin:0; font-size:12px; color:var(--text-secondary);">Exemple d'appel cURL</h4>
-                                    <button class="statisty-btn-secondary" style="font-size:10px; padding:4px 8px;" onclick="copyCurl(this, '{{ url($route['uri']) }}', '{{ $primaryMethod }}')">📋 Copier cURL</button>
+                                        @if(!empty($route['params']))
+                                            <div>
+                                                <h3>Paramètres d'URL</h3>
+                                                <table class="statisty-table-mini">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Paramètre</th>
+                                                            <th>Type</th>
+                                                            <th>Obligatoire</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach($route['params'] as $p)
+                                                            <tr>
+                                                                <td><code>{{ $p['name'] }}</code></td>
+                                                                <td>{{ $p['type'] }}</td>
+                                                                <td>
+                                                                    @if($p['required'])
+                                                                        <span class="req-badge req-true">Oui</span>
+                                                                    @else
+                                                                        <span class="req-badge req-false">Non</span>
+                                                                    @endif
+                                                                </td>
+                                                            </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        @endif
+                                    </div>
+
+                                    @if(!empty($route['validation_rules']))
+                                        <div class="statisty-doc-section" style="margin-top:16px;">
+                                            <h3>Structure de Requête (Règles de validation)</h3>
+                                            <table class="statisty-table-mini">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Champ</th>
+                                                        <th>Règles</th>
+                                                        <th>Requis</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($route['validation_rules'] as $rule)
+                                                        <tr>
+                                                            <td><strong>{{ $rule['field'] }}</strong></td>
+                                                            <td><code>{{ $rule['rules'] }}</code></td>
+                                                            <td>
+                                                                @if($rule['required'])
+                                                                    <span class="req-badge req-true">Requis</span>
+                                                                @else
+                                                                    <span class="req-badge req-false">Optionnel</span>
+                                                                @endif
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    @endif
+
+                                    <div class="statisty-doc-section" style="margin-top:16px; border-top: 1px solid var(--border-light); padding-top:14px;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                                            <h4 style="margin:0; font-size:12px; color:var(--text-secondary);">Exemple d'appel cURL</h4>
+                                            <button class="statisty-btn-secondary" style="font-size:10px; padding:4px 8px;" onclick="copyCurl(this, '{{ url($route['uri']) }}', '{{ $primaryMethod }}')">📋 Copier cURL</button>
+                                        </div>
+                                        <pre class="curl-code"><code>curl -X {{ $primaryMethod }} "{{ url($route['uri']) }}"</code></pre>
+                                    </div>
                                 </div>
-                                <pre class="curl-code"><code>curl -X {{ $primaryMethod }} "{{ url($route['uri']) }}"</code></pre>
-                            </div>
-                        </div>
-                    </article>
-                @endforeach
+                            </article>
+                        @endforeach
+                    </div>
+                @endif
             </div>
         @endif
     </div>
@@ -212,12 +288,23 @@
         document.addEventListener('DOMContentLoaded', function () {
             const searchInput = document.getElementById('apiDocSearch');
             const methodFilter = document.getElementById('apiMethodFilter');
-            const entries = document.querySelectorAll('.statisty-doc-entry');
+            const tabButtons = document.querySelectorAll('.statisty-doc-tab');
+            const panelWeb = document.getElementById('webRoutesTab');
+            const panelApi = document.getElementById('apiRoutesTab');
+            const apiEntries = document.querySelectorAll('#apiDocContainer .statisty-doc-entry');
+            const webEntries = document.querySelectorAll('#webRoutesTable .statisty-route-entry');
+
+            function setActiveTab(tabId) {
+                tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabId));
+                panelWeb.classList.toggle('hidden', tabId !== 'webRoutesTab');
+                panelApi.classList.toggle('hidden', tabId !== 'apiRoutesTab');
+            }
 
             function filterDocs() {
                 const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
                 const method = methodFilter ? methodFilter.value : 'all';
 
+                const entries = [...apiEntries, ...webEntries];
                 entries.forEach(function(entry) {
                     const uri = entry.getAttribute('data-uri');
                     const methods = entry.getAttribute('data-methods').split(',');
@@ -231,15 +318,17 @@
                         methods.some(m => m.toLowerCase().includes(query));
 
                     const matchesMethod = method === 'all' || methods.includes(method);
-
-                    if (matchesSearch && matchesMethod) {
-                        entry.style.display = 'block';
-                    } else {
-                        entry.style.display = 'none';
-                    }
+                    entry.style.display = matchesSearch && matchesMethod ? '' : 'none';
                 });
             }
 
+            tabButtons.forEach(btn => {
+                btn.addEventListener('click', function () {
+                    setActiveTab(this.dataset.tab);
+                });
+            });
+
+            setActiveTab('webRoutesTab');
             if (searchInput) searchInput.addEventListener('input', filterDocs);
             if (methodFilter) methodFilter.addEventListener('change', filterDocs);
 
@@ -313,6 +402,73 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+        }
+
+        .statisty-doc-tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .statisty-doc-tab {
+            border: 1px solid var(--border-light);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 10px 16px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-weight: 700;
+        }
+
+        .statisty-doc-tab:hover {
+            border-color: var(--border-hover);
+        }
+
+        .statisty-doc-tab.active {
+            background: var(--color-primary);
+            color: #ffffff;
+            border-color: var(--color-primary);
+        }
+
+        .statisty-doc-tab-panel.hidden {
+            display: none;
+        }
+
+        .statisty-doc-tab-panel {
+            display: block;
+        }
+
+        .statisty-table-wrapper {
+            overflow-x: auto;
+        }
+
+        .statisty-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 13px;
+        }
+
+        .statisty-table th,
+        .statisty-table td {
+            padding: 12px 14px;
+            border: 1px solid var(--border-light);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .statisty-table th {
+            background: #f8fafc;
+            color: var(--text-secondary);
+            font-weight: 700;
+        }
+
+        .statisty-table td code {
+            font-family: var(--font-mono, monospace);
+            color: var(--text-primary);
+            font-size: 12px;
         }
 
         .statisty-doc-filters {
@@ -473,6 +629,17 @@
             border-radius: 4px;
             padding: 1px 6px;
             font-family: var(--font-mono, monospace);
+        }
+
+        .route-source {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #4338ca;
+            font-size: 11px;
+            font-weight: 700;
         }
 
         .response-type-badge {

@@ -21,7 +21,7 @@
     </header>
 
     <!-- Global Health Status Card -->
-    <div class="statisty-health-summary status-@if($failedCount > 0)failed @elseif($warningCount > 0)warning @elseready @endif">
+    <div class="statisty-health-summary status-@if($failedCount > 0)failed @elseif($warningCount > 0)warning @else ready @endif">
         <div class="statisty-health-summary-icon">
             @if($failedCount > 0)
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
@@ -83,7 +83,7 @@
                 <h2 style="font-size:18px; font-weight:700; color:var(--text-primary); margin:0;">🐢 Slow Queries Tracker</h2>
                 <p class="statisty-muted" style="margin:4px 0 0; font-size:13px;">Requêtes SQL exécutées par l'application dont le temps d'exécution dépasse {{ config('statisty.features.slow_queries.threshold_ms', 100) }} ms.</p>
             </div>
-            <span class="statisty-status-badge status-@if(count($slowQueries) > 0)warning @elseready @endif" style="font-size:11px; font-weight:700;">
+            <span class="statisty-status-badge status-@if(count($slowQueries) > 0)warning @else ready @endif" style="font-size:11px; font-weight:700;">
                 {{ count($slowQueries) }} détectée(s)
             </span>
         </div>

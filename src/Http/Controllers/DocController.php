@@ -16,6 +16,10 @@ final class DocController extends BaseDashboardController
     {
         $allRoutes = Route::getRoutes()->getRoutes();
         $apiDocs = [];
+        $webRoutes = [];
+
+        $apiPrefix = trim((string) config('statisty.routes.api.prefix', 'api/statisty'), '/');
+        $webPrefix = trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/');
 
         foreach ($allRoutes as $route) {
             $uri = $route->uri();
@@ -26,8 +30,8 @@ final class DocController extends BaseDashboardController
 
             // Exclude statisty package routes and common dev tool routes
             if (
-                str_starts_with($uri, 'api/statisty') ||
-                str_starts_with($uri, 'web/statisty') ||
+                str_starts_with($uri, trim($apiPrefix, '/')) ||
+                str_starts_with($uri, trim($webPrefix, '/')) ||
                 str_starts_with($name, 'statisty.') ||
                 str_starts_with($uri, '_debugbar') ||
                 str_starts_with($uri, '_ignition') ||
@@ -37,6 +41,7 @@ final class DocController extends BaseDashboardController
                 continue;
             }
 
+            $routeTypeInfo = $this->determineRouteType($route, $apiPrefix, $webPrefix);
             $routeInfo = [
                 'uri' => '/' . ltrim($uri, '/'),
                 'methods' => array_filter($methods, fn($m) => $m !== 'HEAD'),
@@ -48,6 +53,8 @@ final class DocController extends BaseDashboardController
                 'validation_rules' => [],
                 'response_type' => null,
                 'is_deprecated' => false,
+                'type' => $routeTypeInfo['type'],
+                'source_hint' => $routeTypeInfo['source_hint'],
             ];
 
             // If action points to a controller method (e.g. App\Http\Controllers\UserController@index)
@@ -119,15 +126,46 @@ final class DocController extends BaseDashboardController
                 $routeInfo['action'] = 'Closure / Callback';
             }
 
-            $apiDocs[] = $routeInfo;
+            if ($routeInfo['type'] === 'api') {
+                $apiDocs[] = $routeInfo;
+            } else {
+                $webRoutes[] = $routeInfo;
+            }
         }
 
-        // Sort API routes alphabetically by URI
+        usort($webRoutes, fn($a, $b) => strcmp($a['uri'], $b['uri']));
         usort($apiDocs, fn($a, $b) => strcmp($a['uri'], $b['uri']));
 
         return view('statisty::doc', array_merge($this->shellData('docs'), [
             'apiDocs' => $apiDocs,
+            'webRoutes' => $webRoutes,
+            'apiPrefix' => $apiPrefix,
+            'webPrefix' => $webPrefix,
         ]));
+    }
+
+    private function determineRouteType($route, string $apiPrefix, string $webPrefix): array
+    {
+        $uri = trim($route->uri(), '/');
+        $middleware = $route->gatherMiddleware();
+
+        if ($apiPrefix !== '' && str_starts_with($uri, trim($apiPrefix, '/'))) {
+            return ['type' => 'api', 'source_hint' => 'Préfixe API'];
+        }
+
+        if (in_array('api', $middleware, true) || in_array('api:api', $middleware, true) || in_array('throttle:api', $middleware, true)) {
+            return ['type' => 'api', 'source_hint' => 'Middleware API'];
+        }
+
+        if ($webPrefix !== '' && str_starts_with($uri, trim($webPrefix, '/'))) {
+            return ['type' => 'web', 'source_hint' => 'Préfixe Web'];
+        }
+
+        if (in_array('web', $middleware, true) || in_array('web:api', $middleware, true)) {
+            return ['type' => 'web', 'source_hint' => 'Middleware Web'];
+        }
+
+        return ['type' => 'web', 'source_hint' => 'Détection par défaut'];
     }
 
     private function parseDocComment(string $docComment): array

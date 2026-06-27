@@ -14,7 +14,7 @@
 
 - **Zéro Configuration Requise :** Installez le package, et votre tableau de bord est prêt.
 - **Workflows Dynamiques :** Une page dédiée par modèle comprenant des graphiques (Area, Spline, Pie, Bar) et des DataTables avec filtres, recherche globale et export (PDF, Excel, CSV, Print).
-- **Détection Intelligente des KPIs :** Calcule automatiquement les totaux, sommes et moyennes en inspectant le typage de vos colonnes (ex: `price`, `amount`, `total`).
+- **Détection Intelligence des KPIs :** Calcule automatiquement les totaux, sommes et moyennes en inspectant le typage de vos colonnes (ex: `price`, `amount`, `total`).
 - **Générateur de Documentation API :** Scanne vos contrôleurs, FormRequests et annotations (`@bodyParam`, `@queryParam`) pour générer automatiquement la documentation de votre API.
 - **Suivi des Slow Queries :** Détecte et enregistre les requêtes SQL lentes directement dans le tableau de bord pour optimiser les performances.
 - **Diagnostic de Santé (Health) :** Vérification en temps réel de votre base de données, du cache, des logs, et du mode debug.
@@ -24,11 +24,13 @@
 ## 📦 Installation
 
 1. Installez le package via Composer :
+
 ```bash
 composer require ld/statisty
 ```
 
-2. Publiez les assets (CSS, JS, Images) et le fichier de configuration :
+1. Publiez les assets (CSS, JS, Images) et le fichier de configuration :
+
 ```bash
 php artisan vendor:publish --tag=statisty-config
 php artisan vendor:publish --tag=statisty-assets
@@ -36,6 +38,7 @@ php artisan vendor:publish --tag=statisty-views
 ```
 
 *(Optionnel)* Pour de meilleures performances en production, lancez la commande de découverte afin de cacher la structure de vos modèles :
+
 ```bash
 php artisan statisty:discover
 ```
@@ -51,6 +54,7 @@ http://votre-app.test/web/statisty/dashboard
 ```
 
 Sur cette page, vous retrouverez :
+
 - Une **Heatmap d'activité** de votre application.
 - Les **KPIs globaux** de vos modèles.
 - Un accès rapide aux **Workflows** de chaque modèle configuré.
@@ -62,6 +66,7 @@ Sur cette page, vous retrouverez :
 Toute la configuration s'effectue dans le fichier publié `config/statisty.php`. Voici les sections clés pour personnaliser Statisty selon vos besoins.
 
 ### 1. Sécurité et Accès (Middlewares)
+
 Par défaut, Statisty est ouvert. **En production, il est crucial de protéger l'accès.**
 Ouvrez `config/statisty.php` et ajoutez vos middlewares (comme `auth` ou un middleware personnalisé) dans la clé `routes.web.middleware` :
 
@@ -82,7 +87,8 @@ Ouvrez `config/statisty.php` et ajoutez vos middlewares (comme `auth` ou un midd
 ```
 
 ### 2. Configuration des Modèles (Workflows)
-Statisty vous permet de choisir précisément quels modèles exposer, et surtout quelles colonnes ou relations afficher dans le tableau de données. 
+
+Statisty vous permet de choisir précisément quels modèles exposer, et surtout quelles colonnes ou relations afficher dans le tableau de données.
 
 Rendez-vous dans la clé `'models'` de `config/statisty.php` :
 
@@ -105,7 +111,7 @@ Rendez-vous dans la clé `'models'` de `config/statisty.php` :
         'enabled' => false, 
     ],
 
-    //Exemple plus concret
+    //Exemple plus concert
 
     'models' => [
         App\Models\User::class => [
@@ -177,9 +183,10 @@ Rendez-vous dans la clé `'models'` de `config/statisty.php` :
 ],
 ```
 
-> **Astuce :** Si vous souhaitez que Statisty ignore certains modèles (ex: `PersonalAccessToken`), ajoutez-les dans le tableau `'disabled_models'`.
+> **Astuce :** Si vous souhaitez que Statisty ignore certain modèles (ex: `PersonalAccessToken`), ajoutez-les dans le tableau `'disabled_models'`.
 
 ### 3. Masquage des Données Sensibles
+
 Statisty masque par défaut certaines colonnes (comme `password` ou `remember_token`). Vous pouvez étendre cette liste pour protéger vos données confidentielles :
 
 ```php
@@ -191,6 +198,7 @@ Statisty masque par défaut certaines colonnes (comme `password` ou `remember_to
 ```
 
 ### 4. Suivi des Slow Queries
+
 Statisty intègre un tracker de requêtes lentes. Il écoute les événements de la base de données et consigne les requêtes dépassant un certain seuil.
 
 ```php
@@ -201,6 +209,7 @@ Statisty intègre un tracker de requêtes lentes. Il écoute les événements de
     ],
 ],
 ```
+
 Vous pouvez consulter ces requêtes directement depuis le menu **Logs** de Statisty.
 
 ---
@@ -220,7 +229,7 @@ Une fois dans Statisty, utilisez la barre latérale pour naviguer :
 
 ## 🗺️ Roadmap (Fonctionnalités à venir)
 
-Statisty continue d'évoluer vers un tableau de bord Laravel toujours plus complet et intuitif. Les prochaines versions se concentreront sur :
+Statisty continue d'évoluer vers un tableau de bord Laravel toujours plus complete et intuitif. Les prochaines versions se concentreront sur :
 
 - Une meilleure expérience de navigation dans les workflows.
 - Des tables plus réactives avec filtrage avancé et export amélioré.

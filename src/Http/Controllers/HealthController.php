@@ -19,17 +19,11 @@ final class HealthController extends BaseDashboardController
         try {
             $queriesCount = count(\DB::connection()->getQueryLog());
             $checks[] = $this->healthCheck('Report SQL Queries', $queriesCount . ' queries executed', 'ready');
-        } catch (\Throwable $e) {}
-
-        $slowQueries = [];
-        $filePath = storage_path('logs/statisty_slow_queries.json');
-        if (file_exists($filePath)) {
-            try {
-                $content = @file_get_contents($filePath);
-                $slowQueries = $content ? json_decode($content, true) ?: [] : [];
-            } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
         }
-        $slowQueries = array_reverse($slowQueries);
+
+        $slowQueries = array_merge($this->currentRequestSlowQueries(), $this->loadPersistedSlowQueries());
+        $slowQueries = $this->sortSlowQueries($slowQueries);
 
         return view('statisty::health', [
             'appName' => config('app.name'),
@@ -38,6 +32,82 @@ final class HealthController extends BaseDashboardController
             'slowQueries' => $slowQueries,
             ...$this->shellData('health'),
         ]);
+    }
+
+    private function loadPersistedSlowQueries(): array
+    {
+        $filePath = storage_path('logs/statisty_slow_queries.json');
+        if (! file_exists($filePath)) {
+            return [];
+        }
+
+        try {
+            $content = @file_get_contents($filePath);
+            $slowQueries = $content ? json_decode($content, true) ?: [] : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        return $this->filterRecentSlowQueries($slowQueries);
+    }
+
+    private function currentRequestSlowQueries(): array
+    {
+        $threshold = (float) config('statisty.features.slow_queries.threshold_ms', 100);
+        $currentQueries = [];
+
+        try {
+            $queryLog = \DB::connection()->getQueryLog();
+            $connectionName = \DB::connection()->getName();
+
+            foreach ($queryLog as $entry) {
+                if (! isset($entry['time']) || (float) $entry['time'] < $threshold) {
+                    continue;
+                }
+
+                $currentQueries[] = [
+                    'sql' => $entry['query'] ?? '',
+                    'bindings' => $entry['bindings'] ?? [],
+                    'time_ms' => round((float) ($entry['time'] ?? 0), 2),
+                    'caller' => 'Current request',
+                    'connection' => $connectionName,
+                    'created_at' => date('Y-m-d H:i:s'),
+                ];
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return $currentQueries;
+    }
+
+    private function filterRecentSlowQueries(array $slowQueries): array
+    {
+        $retentionHours = (int) config('statisty.features.slow_queries.retention_hours', 24);
+        if ($retentionHours <= 0) {
+            return $slowQueries;
+        }
+
+        $cutoff = time() - ($retentionHours * 3600);
+
+        return array_values(array_filter($slowQueries, static function ($query) use ($cutoff) {
+            if (empty($query['created_at'])) {
+                return false;
+            }
+
+            return strtotime($query['created_at']) >= $cutoff;
+        }));
+    }
+
+    private function sortSlowQueries(array $slowQueries): array
+    {
+        usort($slowQueries, static function (array $a, array $b): int {
+            $aTime = isset($a['created_at']) ? strtotime($a['created_at']) : 0;
+            $bTime = isset($b['created_at']) ? strtotime($b['created_at']) : 0;
+
+            return $bTime <=> $aTime;
+        });
+
+        return $slowQueries;
     }
 
     private function healthChecks(): array

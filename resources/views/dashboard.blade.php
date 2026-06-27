@@ -62,7 +62,7 @@
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
                         {{ $modelsCount }} workflow{{ $modelsCount > 1 ? 's' : '' }} actif{{ $modelsCount > 1 ? 's' : '' }}
                     </span>
-                    <a href="{{ url(trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/') . '/health') }}" class="pill pill-link">Voir le diagnostic complet →</a>
+                    <a href="{{ url(trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/') . '/health') }}" class="pill pill-link">Voir le diagnostic complete →</a>
                 </span>
             </div>
         </div>
@@ -119,6 +119,15 @@
                 heatmapContainer.style.display = 'block';
                 heatmapEmptyMessage.style.display = 'none';
 
+                var heatmapPoints = rawData.map(function(point) {
+                    return {
+                        x: point[0],
+                        y: point[1],
+                        value: point[2],
+                        date: point[3] || null
+                    };
+                });
+
                 Highcharts.chart('hc-activity-heatmap', {
                     chart: {
                         type: 'heatmap',
@@ -163,7 +172,8 @@
                     },
                     tooltip: {
                         formatter: function () {
-                            return '<b>' + this.point.date + '</b><br/>' +
+                            var dateLabel = this.point.date || this.point.name || 'Date inconnue';
+                            return '<b>' + dateLabel + '</b><br/>' +
                                 this.point.value + ' enregistrement(s)';
                         },
                         backgroundColor: '#ffffff',
@@ -175,7 +185,7 @@
                         name: 'Activité',
                         borderWidth: 2,
                         borderColor: '#ffffff',
-                        data: rawData,
+                        data: heatmapPoints,
                         dataLabels: {
                             enabled: false
                         }

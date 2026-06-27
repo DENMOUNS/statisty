@@ -44,6 +44,7 @@ return [
         'slow_queries' => [
             'enabled' => env('STATISTY_SLOW_QUERIES_ENABLED', true),
             'threshold_ms' => env('STATISTY_SLOW_QUERIES_THRESHOLD', 100), // ms
+            'retention_hours' => env('STATISTY_SLOW_QUERIES_RETENTION_HOURS', 24),
         ],
     ],
 
