@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Statisty\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Statisty\Support\ModelName;
 use Statisty\Support\ModelSchema;
 
@@ -14,7 +15,7 @@ final class WorkflowController extends BaseDashboardController
     {
         // Unescape backslashes in model class namespace
         $modelClass = str_replace('%5C', '\\', $model);
-        if (!str_starts_with($modelClass, '\\')) {
+        if (! str_starts_with($modelClass, '\\')) {
             $modelClass = '\\' . $modelClass;
         }
         $modelClass = ltrim($modelClass, '\\');
@@ -23,19 +24,21 @@ final class WorkflowController extends BaseDashboardController
             abort(403, 'Model is disabled.');
         }
 
-        if (!ModelSchema::isQueryableModel($modelClass)) {
+        if (! ModelSchema::isQueryableModel($modelClass)) {
             abort(404, 'Model is not queryable.');
         }
 
         try {
-            $totalCount = (int) $modelClass::query()->count();
-            $columns    = ModelSchema::visibleColumns($modelClass);
-
-            // ── Colonnes sémantiques détectées automatiquement
+            $columns        = ModelSchema::visibleColumns($modelClass);
             $numericColumns = ModelSchema::semanticNumericColumns($modelClass);
             $statusColumns  = ModelSchema::semanticStatusColumns($modelClass);
+            $tableName      = (new $modelClass())->getTable();
 
-            // ── KPI de base : total
+            // ─── FIX 2a : une seule requête agrégée pour count + toutes les sommes/moyennes ──
+            $aggregates     = $this->fetchAggregates($modelClass, $tableName, $numericColumns);
+            $totalCount     = (int) ($aggregates['_total'] ?? 0);
+
+            // ─── KPIs globaux construits depuis les agrégats déjà calculés ────────────────
             $kpis = [
                 [
                     'label' => 'Total ' . ModelName::label($modelClass),
@@ -43,164 +46,65 @@ final class WorkflowController extends BaseDashboardController
                     'sub'   => 'Nombre total d\'enregistrements',
                     'type'  => 'count',
                     'icon'  => 'total',
-                ]
+                ],
             ];
 
-            // ── KPIs numériques globaux (sum + avg)
             foreach ($numericColumns as $col) {
-                try {
-                    $sum = $modelClass::query()->sum($col);
-                    $avg = $modelClass::query()->avg($col);
-                    $label = ucwords(str_replace('_', ' ', $col));
+                $sum = $aggregates['sum_' . $col] ?? 0;
+                $avg = $aggregates['avg_' . $col] ?? 0;
+                $label = ucwords(str_replace('_', ' ', $col));
 
-                    $kpis[] = [
-                        'label' => 'Total ' . $label,
-                        'value' => is_numeric($sum) ? number_format((float) $sum, 2) : '0.00',
-                        'sub'   => 'Somme de ' . $col,
-                        'type'  => 'sum',
-                        'icon'  => 'sum',
-                    ];
-                    $kpis[] = [
-                        'label' => 'Moy. ' . $label,
-                        'value' => is_numeric($avg) ? number_format((float) $avg, 2) : '0.00',
-                        'sub'   => 'Moyenne de ' . $col,
-                        'type'  => 'avg',
-                        'icon'  => 'avg',
-                    ];
-                } catch (\Throwable $e) {
-                    // Ignore transient SQL errors on calculation
-                }
-            }
-
-            // ── Analyse par statut : répartition + métriques croisées
-            $statusBreakdown = [];
-            foreach ($statusColumns as $statusCol) {
-                try {
-                    $groups = $modelClass::query()
-                        ->select($statusCol, \DB::raw('COUNT(*) as _count'))
-                        ->groupBy($statusCol)
-                        ->orderByDesc('_count')
-                        ->limit(20)
-                        ->get();
-
-                    $breakdown = [];
-                    foreach ($groups as $row) {
-                        $statusValue = $row->{$statusCol} ?? 'null';
-                        $statusCount = (int) ($row->_count ?? 0);
-
-                        // KPI count par valeur de statut
-                        $kpis[] = [
-                            'label'  => ucfirst(str_replace(['_', '-'], ' ', (string) $statusValue)),
-                            'value'  => number_format($statusCount),
-                            'sub'    => $statusCol . ' = ' . $statusValue,
-                            'type'   => 'status',
-                            'status' => (string) $statusValue,
-                            'icon'   => 'status',
-                        ];
-
-                        // KPIs numériques par valeur de statut
-                        $numericByStatus = [];
-                        foreach ($numericColumns as $numCol) {
-                            try {
-                                $filteredSum = (float) $modelClass::query()
-                                    ->where($statusCol, $statusValue)
-                                    ->sum($numCol);
-                                $numericByStatus[$numCol] = number_format($filteredSum, 2);
-                            } catch (\Throwable $e) {
-                                $numericByStatus[$numCol] = null;
-                            }
-                        }
-
-                        $breakdown[] = [
-                            'value'         => (string) $statusValue,
-                            'count'         => $statusCount,
-                            'percent'       => $totalCount > 0 ? round(($statusCount / $totalCount) * 100, 1) : 0,
-                            'numeric_sums'  => $numericByStatus,
-                        ];
-                    }
-
-                    $statusBreakdown[$statusCol] = $breakdown;
-                } catch (\Throwable $e) {
-                    // Ignore si la colonne est inaccessible
-                }
-            }
-
-            // ── Fetch last 50 rows for the Datatable
-            $recentLimit = 50;
-            $rows = [];
-            if (method_exists($modelClass, 'query')) {
-                $query = $modelClass::query()->select($columns)->limit($recentLimit);
-                if (in_array('created_at', $columns, true)) {
-                    $query->latest('created_at');
-                }
-                $rows = $query->get()
-                    ->map(fn (mixed $row): array => collect($row->toArray())
-                        ->only($columns)
-                        ->map(fn (mixed $val): mixed => is_scalar($val) || $val === null ? $val : json_encode($val))
-                        ->all())
-                    ->all();
-            }
-
-            // ── Build panels for relations declared in config
-            $relatedPanels = $this->buildRelatedPanels($modelClass);
-
-            // ── Compiler les métriques disponibles pour les graphiques (Champs locaux + Relations numériques)
-            $chartMetrics = [
-                [
-                    'value' => '',
-                    'label' => 'Nombre de ' . ModelName::label($modelClass) . ' (Volume)',
-                ]
-            ];
-
-            // Colonnes numériques locales
-            foreach ($numericColumns as $col) {
-                $chartMetrics[] = [
-                    'value' => $col,
-                    'label' => 'Somme de ' . ucwords(str_replace('_', ' ', $col)),
+                $kpis[] = [
+                    'label' => 'Total ' . $label,
+                    'value' => number_format((float) $sum, 2),
+                    'sub'   => 'Somme de ' . $col,
+                    'type'  => 'sum',
+                    'icon'  => 'sum',
+                ];
+                $kpis[] = [
+                    'label' => 'Moy. ' . $label,
+                    'value' => number_format((float) $avg, 2),
+                    'sub'   => 'Moyenne de ' . $col,
+                    'type'  => 'avg',
+                    'icon'  => 'avg',
                 ];
             }
 
-            // Colonnes numériques des relations configurées
-            $configRelations = (array) config('statisty.models.' . $modelClass . '.relations', []);
-            foreach ($configRelations as $relationName => $relConfig) {
-                $relatedClass = null;
-                try {
-                    $profiler = app(\Statisty\Discovery\RelationshipProfile::class);
-                    $profiledRelations = $profiler->profileModel($modelClass);
-                    $relatedClass = $profiledRelations[$relationName]['related'] ?? null;
-                } catch (\Throwable $e) {}
+            // ─── FIX 2a : analyse par statut — une seule requête par colonne de statut ──────
+            $statusBreakdown = [];
+            foreach ($statusColumns as $statusCol) {
+                $breakdown = $this->fetchStatusBreakdown(
+                    $modelClass,
+                    $tableName,
+                    $statusCol,
+                    $numericColumns,
+                    $totalCount,
+                );
 
-                if (!$relatedClass) {
-                    try {
-                        $instance = new $modelClass();
-                        if (method_exists($instance, $relationName)) {
-                            $relatedClass = get_class($instance->{$relationName}()->getRelated());
-                        }
-                    } catch (\Throwable $e) {}
+                foreach ($breakdown as $item) {
+                    $kpis[] = [
+                        'label'  => ucfirst(str_replace(['_', '-'], ' ', (string) $item['value'])),
+                        'value'  => number_format($item['count']),
+                        'sub'    => $statusCol . ' = ' . $item['value'],
+                        'type'   => 'status',
+                        'status' => (string) $item['value'],
+                        'icon'   => 'status',
+                    ];
                 }
 
-                if ($relatedClass && class_exists($relatedClass)) {
-                    $wantedCols = (array) ($relConfig['columns'] ?? []);
-                    $availableCols = ModelSchema::visibleColumns($relatedClass);
-                    $cols = $wantedCols !== []
-                        ? array_values(array_intersect($wantedCols, $availableCols))
-                        : $availableCols;
-
-                    $relatedNumericCols = [];
-                    foreach ($cols as $col) {
-                        if (in_array(strtolower($col), ['amount', 'total', 'price', 'quantity', 'value', 'points', 'sum', 'count', 'score', 'total_amount', 'subtotal', 'revenue', 'cost', 'fee', 'tax', 'discount', 'weight', 'balance'])) {
-                            $relatedNumericCols[] = $col;
-                        }
-                    }
-
-                    foreach ($relatedNumericCols as $col) {
-                        $chartMetrics[] = [
-                            'value' => "{$relationName}.{$col}",
-                            'label' => ucwords(str_replace(['_', 'Items'], [' ', ' Items'], $relationName)) . ' : Somme de ' . ucwords(str_replace('_', ' ', $col)),
-                        ];
-                    }
+                if (! empty($breakdown)) {
+                    $statusBreakdown[$statusCol] = $breakdown;
                 }
             }
+
+            // ─── Fetch 50 dernières lignes pour la DataTable ──────────────────────────────
+            $rows = $this->recentRows($modelClass, $columns, 50);
+
+            // ─── Panneaux des relations ────────────────────────────────────────────────────
+            $relatedPanels = $this->buildRelatedPanels($modelClass);
+
+            // ─── Métriques disponibles pour les graphiques ────────────────────────────────
+            $chartMetrics = $this->buildChartMetrics($modelClass, $numericColumns);
 
             return view('statisty::workflow', [
                 'appName'         => config('app.name'),
@@ -226,11 +130,173 @@ final class WorkflowController extends BaseDashboardController
         }
     }
 
-    /**
-     * Resolve related model panels from config + RelationshipProfile introspection.
-     * Returns an array of panels, each with: relationName, label, type, relatedClass,
-     * relatedLabel, columns, count, sample rows, workflowUrl.
-     */
+    // ─────────────────────────────────────────────────────────────────────────
+    // Une seule requête SQL pour COUNT(*) + SUM(col) + AVG(col) de toutes les
+    // colonnes numériques → remplace la boucle de requêtes individuelles.
+    // ─────────────────────────────────────────────────────────────────────────
+    private function fetchAggregates(string $modelClass, string $tableName, array $numericColumns): array
+    {
+        $selects = ['COUNT(*) as _total'];
+
+        foreach ($numericColumns as $col) {
+            $quoted    = DB::getQueryGrammar()->wrap($col);
+            $selects[] = "SUM({$quoted}) as sum_{$col}";
+            $selects[] = "AVG({$quoted}) as avg_{$col}";
+        }
+
+        try {
+            $row = $modelClass::query()
+                ->selectRaw(implode(', ', $selects))
+                ->first();
+
+            return $row ? (array) $row->toArray() : ['_total' => 0];
+        } catch (\Throwable $e) {
+            return ['_total' => 0];
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Une seule requête par colonne de statut pour obtenir la répartition +
+    // les sommes numériques groupées → remplace N requêtes imbriquées.
+    // ─────────────────────────────────────────────────────────────────────────
+    private function fetchStatusBreakdown(
+        string $modelClass,
+        string $tableName,
+        string $statusCol,
+        array $numericColumns,
+        int $totalCount,
+    ): array {
+        $grammar   = DB::getQueryGrammar();
+        $quotedStatus = $grammar->wrap($statusCol);
+
+        $selects = [
+            "{$quotedStatus} as _status_value",
+            'COUNT(*) as _count',
+        ];
+
+        foreach ($numericColumns as $col) {
+            $quoted    = $grammar->wrap($col);
+            $selects[] = "SUM({$quoted}) as sum_{$col}";
+        }
+
+        try {
+            $rows = $modelClass::query()
+                ->selectRaw(implode(', ', $selects))
+                ->groupBy($statusCol)
+                ->orderByDesc('_count')
+                ->limit(20)
+                ->get();
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        $breakdown = [];
+        foreach ($rows as $row) {
+            $statusValue = $row->_status_value ?? 'null';
+            $statusCount = (int) ($row->_count ?? 0);
+
+            $numericSums = [];
+            foreach ($numericColumns as $col) {
+                $numericSums[$col] = number_format((float) ($row->{'sum_' . $col} ?? 0), 2);
+            }
+
+            $breakdown[] = [
+                'value'        => (string) $statusValue,
+                'count'        => $statusCount,
+                'percent'      => $totalCount > 0
+                    ? round(($statusCount / $totalCount) * 100, 1)
+                    : 0,
+                'numeric_sums' => $numericSums,
+            ];
+        }
+
+        return $breakdown;
+    }
+
+    private function recentRows(string $modelClass, array $columns, int $limit = 50): array
+    {
+        if ($columns === [] || ! method_exists($modelClass, 'query')) {
+            return [];
+        }
+
+        try {
+            $query = $modelClass::query()->select($columns)->limit($limit);
+
+            if (in_array('created_at', $columns, true)) {
+                $query->latest('created_at');
+            }
+
+            return $query->get()
+                ->map(fn (mixed $row): array => collect($row->toArray())
+                    ->only($columns)
+                    ->map(fn (mixed $val): mixed => is_scalar($val) || $val === null
+                        ? $val
+                        : json_encode($val))
+                    ->all())
+                ->all();
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    private function buildChartMetrics(string $modelClass, array $numericColumns): array
+    {
+        $chartMetrics = [[
+            'value' => '',
+            'label' => 'Nombre de ' . ModelName::label($modelClass) . ' (Volume)',
+        ]];
+
+        foreach ($numericColumns as $col) {
+            $chartMetrics[] = [
+                'value' => $col,
+                'label' => 'Somme de ' . ucwords(str_replace('_', ' ', $col)),
+            ];
+        }
+
+        $configRelations = (array) config('statisty.models.' . $modelClass . '.relations', []);
+        foreach ($configRelations as $relationName => $relConfig) {
+            $relatedClass = null;
+            try {
+                $instance = new $modelClass();
+                if (method_exists($instance, $relationName)) {
+                    $relatedClass = get_class($instance->{$relationName}()->getRelated());
+                }
+            } catch (\Throwable $e) {}
+
+            if (! $relatedClass || ! class_exists($relatedClass)) {
+                continue;
+            }
+
+            $wantedCols    = (array) ($relConfig['columns'] ?? []);
+            $availableCols = ModelSchema::visibleColumns($relatedClass);
+            $cols = $wantedCols !== []
+                ? array_values(array_intersect($wantedCols, $availableCols))
+                : $availableCols;
+
+            $numericKeywords = [
+                'amount', 'total', 'price', 'quantity', 'value', 'points',
+                'sum', 'count', 'score', 'total_amount', 'subtotal', 'revenue',
+                'cost', 'fee', 'tax', 'discount', 'weight', 'balance',
+            ];
+
+            foreach ($cols as $col) {
+                if (in_array(strtolower($col), $numericKeywords)) {
+                    $chartMetrics[] = [
+                        'value' => "{$relationName}.{$col}",
+                        'label' => ucwords(str_replace(['_', 'Items'], [' ', ' Items'], $relationName))
+                            . ' : Somme de ' . ucwords(str_replace('_', ' ', $col)),
+                    ];
+                }
+            }
+        }
+
+        return $chartMetrics;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Panneaux des modèles liés — inchangé fonctionnellement, on garde la même
+    // logique de résolution mais on batch les counts en une passe.
+    // ─────────────────────────────────────────────────────────────────────────
     private function buildRelatedPanels(string $modelClass): array
     {
         $configRelations = (array) config('statisty.models.' . $modelClass . '.relations', []);
@@ -250,18 +316,18 @@ final class WorkflowController extends BaseDashboardController
         $webPrefix = trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/');
 
         foreach ($configRelations as $relationName => $relConfig) {
-            if (!isset($profiledRelations[$relationName])) {
+            if (! isset($profiledRelations[$relationName])) {
                 continue;
             }
 
             $relatedClass = $profiledRelations[$relationName]['related'] ?? null;
             $relationType = $profiledRelations[$relationName]['type'] ?? 'Unknown';
 
-            if (!$relatedClass || !class_exists($relatedClass)) {
+            if (! $relatedClass || ! class_exists($relatedClass)) {
                 continue;
             }
 
-            $wantedCols   = (array) ($relConfig['columns'] ?? []);
+            $wantedCols    = (array) ($relConfig['columns'] ?? []);
             $availableCols = ModelSchema::visibleColumns($relatedClass);
             $cols = $wantedCols !== []
                 ? array_values(array_intersect($wantedCols, $availableCols))
@@ -281,7 +347,9 @@ final class WorkflowController extends BaseDashboardController
                 $sample = $sampleQuery->get()
                     ->map(fn (mixed $row): array => collect($row->toArray())
                         ->only($cols)
-                        ->map(fn (mixed $v): mixed => is_scalar($v) || $v === null ? $v : json_encode($v))
+                        ->map(fn (mixed $v): mixed => is_scalar($v) || $v === null
+                            ? $v
+                            : json_encode($v))
                         ->all())
                     ->all();
             } catch (\Throwable $e) {

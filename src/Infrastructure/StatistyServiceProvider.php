@@ -37,7 +37,6 @@ final class StatistyServiceProvider extends ServiceProvider
 
         $this->mergeConfigFrom(__DIR__ . '/../../config/statisty.php', 'statisty');
 
-        // Core manager + bindings
         $this->app->singleton('statisty', fn (): StatistyManager => new StatistyManager(
             config: config('statisty', []),
             dashboardBuilder: $this->app->make(DashboardBuilder::class),
@@ -52,9 +51,8 @@ final class StatistyServiceProvider extends ServiceProvider
         $this->app->bind(TableBuilderContract::class, PaginatedTableBuilder::class);
         $this->app->bind(RelationshipDiscoveryContract::class, EloquentRelationshipDiscovery::class);
 
-        // Profiling cache and discovery helpers
         $this->app->singleton(ProfilingCache::class, function ($app) {
-            $cache = $app['cache.store'] ?? $app['cache'];
+            $cache  = $app['cache.store'] ?? $app['cache'];
             $prefix = config('statisty.workspace.prefix', 'statisty');
 
             return new ProfilingCache($cache, $prefix);
@@ -76,7 +74,6 @@ final class StatistyServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // register rate limiter for statisty endpoints
         if (config('statisty.rate_limit.enabled', true)) {
             RateLimiter::for('statisty', function (Request $request) {
                 $max = (int) config('statisty.rate_limit.max', 60);
@@ -84,18 +81,17 @@ final class StatistyServiceProvider extends ServiceProvider
                 return Limit::perMinute($max)->by($request->ip() ?: $request->fingerprint());
             });
         }
-        // register package middleware alias if router available
+
         if (class_exists('\Illuminate\Routing\Router')) {
             try {
                 $router = $this->app->make(\Illuminate\Routing\Router::class);
                 $router->aliasMiddleware('statisty.auth', \Statisty\Http\Middleware\EnsureStatistyAuthorized::class);
             } catch (\Throwable) {
-                // ignore if router not resolvable in this environment
             }
         }
+
         $this->loadRoutesFrom(__DIR__ . '/../../routes/statisty.php');
 
-        // publish config, views and assets
         $this->publishes([
             __DIR__ . '/../../config/statisty.php' => config_path('statisty.php'),
         ], 'statisty-config');
@@ -105,10 +101,10 @@ final class StatistyServiceProvider extends ServiceProvider
         ], 'statisty-views');
 
         $this->publishes([
-            __DIR__ . '/../../resources/js/statisty.js' => public_path('vendor/statisty/statisty.js'),
-            __DIR__ . '/../../resources/css/statisty.css' => public_path('vendor/statisty/statisty.css'),
-            __DIR__ . '/../../resources/logo.png' => public_path('vendor/statisty/logo.png'),
-            __DIR__ . '/../../resources/mascotte.png' => public_path('vendor/statisty/mascotte.png'),
+            __DIR__ . '/../../resources/js/statisty.js'    => public_path('vendor/statisty/statisty.js'),
+            __DIR__ . '/../../resources/css/statisty.css'  => public_path('vendor/statisty/statisty.css'),
+            __DIR__ . '/../../resources/logo.png'           => public_path('vendor/statisty/logo.png'),
+            __DIR__ . '/../../resources/mascotte.png'       => public_path('vendor/statisty/mascotte.png'),
         ], 'statisty-assets');
 
         $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'statisty');
@@ -122,67 +118,117 @@ final class StatistyServiceProvider extends ServiceProvider
             ]);
         }
 
-        // Listen to SQL Queries to track slow queries
-        if (config('statisty.features.slow_queries.enabled', true)) {
-            try {
-                $db = $this->app->make('db');
-                $db->listen(function (\Illuminate\Database\Events\QueryExecuted $query) {
-                    $threshold = (float) config('statisty.features.slow_queries.threshold_ms', 100);
-                    if ($query->time >= $threshold) {
-                        $sql = $query->sql;
-                        if (str_contains($sql, 'statisty_slow_queries')) {
-                            return;
-                        }
+        $this->bootSlowQueryListener();
+    }
 
-                        // Trace where it comes from in user application code
-                        $caller = 'Unknown';
-                        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
-                        foreach ($trace as $step) {
-                            if (isset($step['file']) && !str_contains($step['file'], 'vendor\\') && !str_contains($step['file'], 'vendor/')) {
-                                $caller = basename($step['file']) . ':' . $step['line'];
-                                break;
-                            }
-                        }
+    private function bootSlowQueryListener(): void
+    {
+        if (! config('statisty.features.slow_queries.enabled', true)) {
+            return;
+        }
 
-                        $filePath = storage_path('logs/statisty_slow_queries.json');
-                        $slowQueries = [];
-                        if (file_exists($filePath)) {
-                            try {
-                                $content = file_get_contents($filePath);
-                                $slowQueries = $content ? json_decode($content, true) ?: [] : [];
-                            } catch (\Throwable $e) {}
-                        }
+        try {
+            $db = $this->app->make('db');
 
-                        $bindings = [];
-                        foreach ($query->bindings as $binding) {
-                            if ($binding instanceof \DateTimeInterface) {
-                                $bindings[] = $binding->format('Y-m-d H:i:s');
-                            } elseif (is_object($binding)) {
-                                $bindings[] = get_class($binding);
-                            } else {
-                                $bindings[] = $binding;
-                            }
-                        }
+            $db->listen(function (\Illuminate\Database\Events\QueryExecuted $query) {
+                $threshold = (float) config('statisty.features.slow_queries.threshold_ms', 100);
 
-                        $slowQueries[] = [
-                            'sql' => $sql,
-                            'bindings' => $bindings,
-                            'time_ms' => round($query->time, 2),
-                            'caller' => $caller,
-                            'connection' => $query->connectionName,
-                            'created_at' => date('Y-m-d H:i:s'),
-                        ];
+                if ($query->time < $threshold) {
+                    return;
+                }
 
-                        if (count($slowQueries) > 100) {
-                            array_shift($slowQueries);
-                        }
+                $sql = $query->sql;
 
-                        file_put_contents($filePath, json_encode($slowQueries, JSON_PRETTY_PRINT));
+                // Éviter la récursion sur notre propre fichier
+                if (str_contains($sql, 'statisty_slow_queries')) {
+                    return;
+                }
+
+                $caller = 'Unknown';
+                $trace  = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
+                foreach ($trace as $step) {
+                    if (isset($step['file'])
+                        && ! str_contains($step['file'], 'vendor\\')
+                        && ! str_contains($step['file'], 'vendor/')
+                    ) {
+                        $caller = basename($step['file']) . ':' . $step['line'];
+                        break;
                     }
-                });
-            } catch (\Throwable $e) {
-                // ignore
+                }
+
+                $bindings = [];
+                foreach ($query->bindings as $binding) {
+                    if ($binding instanceof \DateTimeInterface) {
+                        $bindings[] = $binding->format('Y-m-d H:i:s');
+                    } elseif (is_object($binding)) {
+                        $bindings[] = get_class($binding);
+                    } else {
+                        $bindings[] = $binding;
+                    }
+                }
+
+                $entry = [
+                    'sql'        => $sql,
+                    'bindings'   => $bindings,
+                    'time_ms'    => round($query->time, 2),
+                    'caller'     => $caller,
+                    'connection' => $query->connectionName,
+                    'created_at' => date('Y-m-d H:i:s'),
+                ];
+
+                $this->appendSlowQuery($entry);
+            });
+        } catch (\Throwable $e) {
+            // continuer
+        }
+    }
+
+    private function appendSlowQuery(array $entry): void
+    {
+        $filePath    = storage_path('logs/statisty_slow_queries.json');
+        $lockPath    = $filePath . '.lock';
+        $maxEntries  = 100;
+
+        $lockHandle = @fopen($lockPath, 'c');
+        if ($lockHandle === false) {
+            return;
+        }
+
+        try {
+            if (! flock($lockHandle, LOCK_EX)) {
+                return;
             }
+
+            $slowQueries = [];
+            if (file_exists($filePath)) {
+                $content = @file_get_contents($filePath);
+                if ($content !== false && $content !== '') {
+                    $decoded = json_decode($content, true);
+                    if (is_array($decoded)) {
+                        $slowQueries = $decoded;
+                    }
+                }
+            }
+
+            $slowQueries[] = $entry;
+            if (count($slowQueries) > $maxEntries) {
+                $slowQueries = array_slice($slowQueries, -$maxEntries);
+            }
+
+            $tmpPath = $filePath . '.tmp.' . getmypid();
+            $written = @file_put_contents(
+                $tmpPath,
+                json_encode($slowQueries, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            );
+
+            if ($written !== false) {
+                @rename($tmpPath, $filePath);
+            } else {
+                @unlink($tmpPath);
+            }
+        } finally {
+            flock($lockHandle, LOCK_UN);
+            fclose($lockHandle);
         }
     }
 }
