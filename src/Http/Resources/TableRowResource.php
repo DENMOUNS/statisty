@@ -9,22 +9,14 @@ use Statisty\Support\ModelSchema;
 
 final class TableRowResource extends JsonResource
 {
+    private static array $hiddenCache = [];
+    private static array $modelInstances = [];
+
     public function toArray($request): array
     {
         $modelClass = $request->route('model') ?? $request->get('statisty_model');
 
-        $hidden = (array) config('statisty.hidden_columns', []);
-
-        if ($modelClass && class_exists($modelClass)) {
-            try {
-                $m = new $modelClass();
-                if (method_exists($m, 'getHidden')) {
-                    $hidden = array_merge($hidden, (array) $m->getHidden());
-                }
-            } catch (\Throwable) {
-                // ignore
-            }
-        }
+        $hidden = $this->resolveHiddenColumns($modelClass);
 
         $data = parent::toArray($request);
 
@@ -46,7 +38,7 @@ final class TableRowResource extends JsonResource
                 [$rel, $attr] = explode('.', $col, 2);
 
                 try {
-                    $root = $modelClass && class_exists($modelClass) ? new $modelClass() : null;
+                    $root = $this->resolveModelInstance($modelClass);
                     if (! $root || ! ModelSchema::isVisibleRelationColumn($root, $rel, $attr)) {
                         continue;
                     }
@@ -80,5 +72,42 @@ final class TableRowResource extends JsonResource
         }
 
         return $data;
+    }
+
+    private function resolveHiddenColumns(?string $modelClass): array
+    {
+        $hidden = (array) config('statisty.hidden_columns', []);
+
+        if (! $modelClass || ! class_exists($modelClass)) {
+            return $hidden;
+        }
+
+        if (! isset(self::$hiddenCache[$modelClass])) {
+            try {
+                $instance = $this->resolveModelInstance($modelClass);
+                if ($instance && method_exists($instance, 'getHidden')) {
+                    self::$hiddenCache[$modelClass] = array_merge($hidden, (array) $instance->getHidden());
+                } else {
+                    self::$hiddenCache[$modelClass] = $hidden;
+                }
+            } catch (\Throwable) {
+                self::$hiddenCache[$modelClass] = $hidden;
+            }
+        }
+
+        return self::$hiddenCache[$modelClass];
+    }
+
+    private function resolveModelInstance(string $modelClass): ?object
+    {
+        if (! isset(self::$modelInstances[$modelClass])) {
+            try {
+                self::$modelInstances[$modelClass] = new $modelClass();
+            } catch (\Throwable) {
+                self::$modelInstances[$modelClass] = null;
+            }
+        }
+
+        return self::$modelInstances[$modelClass];
     }
 }

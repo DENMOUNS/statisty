@@ -31,7 +31,14 @@ final class TableController extends Controller
             $qb = new TableQueryBuilder($model::query());
 
             // apply SQL-level column selection to avoid leaking sensitive fields
-            $qb->selectVisible($request->query('columns', null));
+            $requestedColumns = $request->query('columns', null);
+            if (is_array($requestedColumns)) {
+                $requestedColumns = array_slice($requestedColumns, 0, 50);
+            } else {
+                $requestedColumns = null;
+            }
+
+            $qb->selectVisible($requestedColumns);
 
             $perPage = min((int) config('statisty.pagination.max', 1000), (int) $request->query('per_page', 50));
             $sort = $request->query('sort');
@@ -39,7 +46,7 @@ final class TableController extends Controller
             $search = $request->query('q');
 
             if ($sort) { $qb->applySorting($sort, $dir); }
-            if ($search) { $qb->applySearch($request->query('columns', []), $search); }
+            if ($search) { $qb->applySearch($requestedColumns ?? [], $search); }
             $filters = $request->query('filters', []);
             $qb->applyFilters($filters);
 

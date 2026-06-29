@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Statisty\Http\Controllers;
 
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class JobsController extends BaseDashboardController
 {
-    public function jobs(Request $request)
+    public function jobs(Request $request): View|JsonResponse
     {
         return view('statisty::jobs', [
             'appName' => config('app.name'),
@@ -20,16 +24,16 @@ final class JobsController extends BaseDashboardController
 
     private function jobData(): array
     {
-        $hasJobs = \Schema::hasTable('jobs');
-        $hasFailed = \Schema::hasTable('failed_jobs');
-        $hasBatches = \Schema::hasTable('job_batches');
+        $hasJobs = Schema::hasTable('jobs');
+        $hasFailed = Schema::hasTable('failed_jobs');
+        $hasBatches = Schema::hasTable('job_batches');
 
         return [
             'summary' => [
-                'pending' => $hasJobs ? (int) \DB::table('jobs')->whereNull('reserved_at')->count() : 0,
-                'running' => $hasJobs ? (int) \DB::table('jobs')->whereNotNull('reserved_at')->count() : 0,
-                'executed' => $hasBatches ? (int) \DB::table('job_batches')->sum(\DB::raw('total_jobs - pending_jobs')) : null,
-                'failed' => $hasFailed ? (int) \DB::table('failed_jobs')->count() : 0,
+                'pending' => $hasJobs ? (int) DB::table('jobs')->whereNull('reserved_at')->count() : 0,
+                'running' => $hasJobs ? (int) DB::table('jobs')->whereNotNull('reserved_at')->count() : 0,
+                'executed' => $hasBatches ? (int) DB::table('job_batches')->sum(DB::raw('total_jobs - pending_jobs')) : null,
+                'failed' => $hasFailed ? (int) DB::table('failed_jobs')->count() : 0,
             ],
             'tables' => [
                 'jobs' => $hasJobs,
@@ -44,7 +48,7 @@ final class JobsController extends BaseDashboardController
 
     private function pendingJobs(): array
     {
-        return \DB::table('jobs')
+        return DB::table('jobs')
             ->orderByDesc('id')
             ->limit(25)
             ->get()
@@ -62,7 +66,7 @@ final class JobsController extends BaseDashboardController
 
     private function failedJobs(): array
     {
-        return \DB::table('failed_jobs')
+        return DB::table('failed_jobs')
             ->orderByDesc('id')
             ->limit(25)
             ->get()
@@ -79,7 +83,7 @@ final class JobsController extends BaseDashboardController
 
     private function jobBatches(): array
     {
-        return \DB::table('job_batches')
+        return DB::table('job_batches')
             ->orderByDesc('created_at')
             ->limit(15)
             ->get()

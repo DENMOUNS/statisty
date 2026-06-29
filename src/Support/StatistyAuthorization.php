@@ -32,13 +32,13 @@ final class StatistyAuthorization
         }
 
         if ($model === null || ! class_exists($model)) {
-            return true;
+            return false;
         }
 
         try {
             return ! Gate::denies('viewAny', $model);
         } catch (\Throwable) {
-            return true;
+            return false;
         }
     }
 }

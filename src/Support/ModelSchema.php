@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 
 final class ModelSchema
 {
+    /** Cache column listings per model class for the current process. */
+    private static array $columnsCache = [];
     private const DEFAULT_SENSITIVE = ['password', 'remember_token', 'tokens', 'api_token', 'token', 'secret', 'secrets'];
 
     /** Noms de colonnes considérés comme "statut" (valeurs catégorielles). */
@@ -55,15 +57,25 @@ final class ModelSchema
 
     public static function columns(string|Model $model): array
     {
+        $class = is_string($model) ? ltrim($model, '\\') : $model::class;
+
+        if (isset(self::$columnsCache[$class])) {
+            return self::$columnsCache[$class];
+        }
+
         $instance = is_string($model) ? new $model() : $model;
 
         if (! $instance instanceof Model) {
+            self::$columnsCache[$class] = [];
             return [];
         }
 
         try {
-            return $instance->getConnection()->getSchemaBuilder()->getColumnListing($instance->getTable());
+            $cols = $instance->getConnection()->getSchemaBuilder()->getColumnListing($instance->getTable());
+            self::$columnsCache[$class] = $cols;
+            return $cols;
         } catch (\Throwable) {
+            self::$columnsCache[$class] = [];
             return [];
         }
     }

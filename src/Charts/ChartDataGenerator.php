@@ -23,6 +23,109 @@ final class ChartDataGenerator
      */
     public function generateFromModel(string $modelClass, ?string $valueField = null, string $dateColumn = 'created_at', array $options = []): array
     {
+        $this->validateChartRequest($modelClass, $valueField, $dateColumn);
+
+        $period = $this->normalizePeriod($options['period'] ?? 'day');
+        $label = $options['label'] ?? $this->shortClass($modelClass);
+        $maxPie = (int) ($options['max_categories_for_pie'] ?? 12);
+
+        $context = $this->prepareQueryContext($modelClass, $valueField, $dateColumn);
+        $this->applyDateFilters(
+            $context['query'],
+            $options['from'] ?? null,
+            $options['to'] ?? null,
+            $context['dateColumnPrefixed'],
+        );
+
+        $rows = $this->resolveRows(
+            $context['query'],
+            $valueField,
+            $dateColumn,
+            $context['dateColumnPrefixed'],
+            $context['isRelation'],
+            $context['relationField'],
+            $context['valueFieldToAggregate'],
+            $options,
+            $period,
+        );
+
+        if (($rows instanceof Collection && $rows->isEmpty()) || (is_array($rows) && count($rows) === 0)) {
+            return ['labels' => [], 'datasets' => []];
+        }
+
+        if ($valueField === null) {
+            $grouped = $rows instanceof Collection ? $rows->all() : (array) $rows;
+
+            return $this->buildResponseFromGrouped($label, $grouped, $options);
+        }
+
+        if (is_array($rows)) {
+            return $this->buildResponseFromGrouped($label, $rows, $options);
+        }
+
+        $numeric = $rows->pluck('value')->filter(fn ($v) => is_numeric($v))->count() > 0;
+
+        if ($numeric) {
+            if ($rows instanceof Collection && (! empty($options['percentile']) || ! empty($options['histogram']))) {
+                $perBucket = $this->groupValuesByPeriod($rows, $period);
+
+                if (! empty($options['percentile'])) {
+                    $percent = (float) $options['percentile'];
+                    $grouped = array_map(fn ($values) => $this->percentile($values, $percent), $perBucket);
+                } else {
+                    $bins = (int) ($options['histogram']['bins'] ?? 10);
+                    if ($bins <= 0) {
+                        $bins = 10;
+                    }
+
+                    $hist = $this->histogram($rows->pluck('value')->filter()->values()->all(), $bins);
+                    $labels = array_keys($hist);
+                    $data = array_values($hist);
+
+                    $ds = new ChartDataSet($label, $data, 'bar', $this->visualOptions($options));
+
+                    return ['labels' => $labels, 'datasets' => [$ds->toChartJs()]];
+                }
+
+                $labels = array_keys($grouped);
+                $data = array_values($grouped);
+                $data = $this->maybeTransform($data, $options);
+
+                $ds = new ChartDataSet($label, $data, 'line', $this->visualOptions($options));
+
+                return ['labels' => $labels, 'datasets' => [$ds->toChartJs()]];
+            }
+
+            $grouped = $this->groupByPeriodSum($rows, $period);
+
+            return $this->buildResponseFromGrouped($label, $grouped, $options);
+        }
+
+        $categories = $rows->pluck('value')->filter()->values()->all();
+        $counts = array_count_values($categories);
+
+        if (count($counts) <= $maxPie) {
+            $labels = array_keys($counts);
+            $data = array_values($counts);
+
+            $ds = new ChartDataSet($label, $data, 'pie', $this->visualOptions($options));
+
+            return ['labels' => $labels, 'datasets' => [$ds->toChartJs()]];
+        }
+
+        arsort($counts);
+        $top = array_slice($counts, 0, $maxPie, true);
+
+        $labels = array_keys($top);
+        $data = array_values($top);
+
+        $ds = new ChartDataSet($label, $data, 'bar', $this->visualOptions($options));
+
+        return ['labels' => $labels, 'datasets' => [$ds->toChartJs()]];
+    }
+
+    private function validateChartRequest(string $modelClass, ?string $valueField, string $dateColumn): void
+    {
         if (! ModelSchema::isQueryableModel($modelClass)) {
             throw new \InvalidArgumentException("Model class [{$modelClass}] not found.");
         }
@@ -31,39 +134,42 @@ final class ChartDataGenerator
             throw new \InvalidArgumentException("Date column [{$dateColumn}] is not available for charts.");
         }
 
-        if ($valueField !== null) {
-            if (str_contains($valueField, '.')) {
-                [$relationName, $relField] = explode('.', $valueField, 2);
-                $instance = new $modelClass();
-                if (! ModelSchema::isVisibleRelationColumn($instance, $relationName, $relField)) {
-                    throw new \InvalidArgumentException("Relation column [{$valueField}] is not available for charts.");
-                }
-            } else {
-                if (! ModelSchema::isVisibleColumn($modelClass, $valueField)) {
-                    throw new \InvalidArgumentException("Value column [{$valueField}] is not available for charts.");
-                }
+        if ($valueField === null) {
+            return;
+        }
+
+        if (str_contains($valueField, '.')) {
+            [$relationName, $relField] = explode('.', $valueField, 2);
+            $instance = new $modelClass();
+            if (! ModelSchema::isVisibleRelationColumn($instance, $relationName, $relField)) {
+                throw new \InvalidArgumentException("Relation column [{$valueField}] is not available for charts.");
             }
+
+            return;
         }
 
-        $period = $options['period'] ?? 'day';
+        if (! ModelSchema::isVisibleColumn($modelClass, $valueField)) {
+            throw new \InvalidArgumentException("Value column [{$valueField}] is not available for charts.");
+        }
+    }
+
+    private function normalizePeriod(?string $period): string
+    {
         $allowed = ['day', 'week', 'month', 'year'];
-        if (! in_array($period, $allowed, true)) {
-            $period = 'day';
-        }
-        $from = $options['from'] ?? null;
-        $to = $options['to'] ?? null;
-        $label = $options['label'] ?? $this->shortClass($modelClass);
-        $maxPie = (int) ($options['max_categories_for_pie'] ?? 12);
 
+        return in_array($period, $allowed, true) ? $period : 'day';
+    }
+
+    private function prepareQueryContext(string $modelClass, ?string $valueField, string $dateColumn): array
+    {
         $query = $modelClass::query();
         $mainTable = (new $modelClass())->getTable();
-
-        // Joindre la relation si nécessaire
         $isRelation = $valueField !== null && str_contains($valueField, '.');
         $valueFieldToAggregate = $valueField;
-        
+        $relationField = null;
+
         if ($isRelation) {
-            [$relationName, $relField] = explode('.', $valueField, 2);
+            [$relationName, $relationField] = explode('.', $valueField, 2);
             $instance = new $modelClass();
             $relation = $instance->{$relationName}();
             $relatedModel = $relation->getRelated();
@@ -78,17 +184,25 @@ final class ChartDataGenerator
                 $ownerKey = $relation->getOwnerKeyName();
                 $query->join($relatedTable, "{$mainTable}.{$foreignKey}", '=', "{$relatedTable}.{$ownerKey}");
             } else {
-                throw new \InvalidArgumentException("Unsupported relation type for charts.");
+                throw new \InvalidArgumentException('Unsupported relation type for charts.');
             }
 
-            // Éviter l'ambiguïté sur les colonnes SQL
-            $valueFieldToAggregate = "{$relatedTable}.{$relField}";
-        } else {
-            $valueFieldToAggregate = $valueField ? "{$mainTable}.{$valueField}" : null;
+            $valueFieldToAggregate = "{$relatedTable}.{$relationField}";
+        } elseif ($valueField !== null) {
+            $valueFieldToAggregate = "{$mainTable}.{$valueField}";
         }
 
-        $dateColumnPrefixed = "{$mainTable}.{$dateColumn}";
+        return [
+            'query' => $query,
+            'dateColumnPrefixed' => "{$mainTable}.{$dateColumn}",
+            'isRelation' => $isRelation,
+            'relationField' => $relationField,
+            'valueFieldToAggregate' => $valueFieldToAggregate,
+        ];
+    }
 
+    private function applyDateFilters(EloquentBuilder $query, ?string $from, ?string $to, string $dateColumnPrefixed): void
+    {
         if ($from !== null) {
             $query->where($dateColumnPrefixed, '>=', Carbon::parse($from));
         }
@@ -96,128 +210,63 @@ final class ChartDataGenerator
         if ($to !== null) {
             $query->where($dateColumnPrefixed, '<=', Carbon::parse($to));
         }
+    }
 
-        // If no value field -> count per period using SQL aggregation
+    private function resolveRows(EloquentBuilder $query, ?string $valueField, string $dateColumn, string $dateColumnPrefixed, bool $isRelation, ?string $relationField, ?string $valueFieldToAggregate, array $options, string $period): mixed
+    {
         if ($valueField === null) {
-            $rows = $this->aggregateCountByPeriod($query, $dateColumnPrefixed, $period);
-        } else {
-            // detect numeric column using a quick sample
-            $numericSample = false;
-            try {
-                $sampleQuery = clone $query;
-                $sample = $sampleQuery->limit(50)->pluck($valueFieldToAggregate)->filter()->values();
-                $numericSample = $sample->filter(fn($v) => is_numeric($v))->count() > 0;
-            } catch (\Throwable) {
-                $numericSample = false;
+            return $this->aggregateCountByPeriod($query, $dateColumnPrefixed, $period);
+        }
+
+        if ($this->shouldUseRawRows($options)) {
+            return $this->collectRawRows($query, $dateColumn, $valueField, $isRelation, $relationField);
+        }
+
+        $numericSample = $this->detectNumericSample($query, $valueFieldToAggregate);
+        if ($numericSample) {
+            return $this->aggregateSumByPeriod($query, $dateColumnPrefixed, $valueFieldToAggregate, $period);
+        }
+
+        return $this->collectRawRows($query, $dateColumn, $valueField, $isRelation, $relationField);
+    }
+
+    private function shouldUseRawRows(array $options): bool
+    {
+        return ! empty($options['percentile']) || ! empty($options['histogram']);
+    }
+
+    private function detectNumericSample(EloquentBuilder $query, ?string $valueFieldToAggregate): bool
+    {
+        if ($valueFieldToAggregate === null) {
+            return false;
+        }
+
+        try {
+            $sampleQuery = clone $query;
+            $sample = $sampleQuery->limit(50)->pluck($valueFieldToAggregate)->filter()->values();
+
+            return $sample->filter(fn ($v) => is_numeric($v))->count() > 0;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function collectRawRows(EloquentBuilder $query, string $dateColumn, string $valueField, bool $isRelation, ?string $relationField): Collection
+    {
+        $dateKey = $dateColumn;
+        $valueKey = $isRelation ? $relationField : $valueField;
+        $rows = new Collection();
+
+        $query->chunk(1000, function ($items) use ($rows, $dateKey, $valueKey): void {
+            foreach ($items as $item) {
+                $rows->push([
+                    'date' => Carbon::parse($item->{$dateKey}),
+                    'value' => $item->{$valueKey},
+                ]);
             }
+        });
 
-            // If percentile or histogram requested, we need raw values per period
-            if (! empty($options['percentile']) || ! empty($options['histogram'])) {
-                $dateKey = $dateColumn; // Nom d'attribut PHP non préfixé
-                $valueKey = $isRelation ? $relField : $valueField;
-
-                $rows = $query->get()->map(function ($item) use ($dateKey, $valueKey) {
-                    return [
-                        'date' => Carbon::parse($item->{$dateKey}),
-                        'value' => $item->{$valueKey},
-                    ];
-                });
-            } elseif ($numericSample) {
-                $rows = $this->aggregateSumByPeriod($query, $dateColumnPrefixed, $valueFieldToAggregate, $period);
-            } else {
-                $dateKey = $dateColumn;
-                $valueKey = $isRelation ? $relField : $valueField;
-
-                $rows = $query->get()->map(function ($item) use ($dateKey, $valueKey) {
-                    return [
-                        'date' => Carbon::parse($item->{$dateKey}),
-                        'value' => $item->{$valueKey},
-                    ];
-                });
-            }
-        }
-
-        if (($rows instanceof Collection && $rows->isEmpty()) || (is_array($rows) && count($rows) === 0)) {
-            return ['labels' => [], 'datasets' => []];
-        }
-
-        // If valueField is null => we count per period
-        if ($valueField === null) {
-            // rows already aggregated: [bucket => count]
-            $grouped = $rows instanceof Collection ? $rows->all() : (array) $rows;
-
-            return $this->buildResponseFromGrouped($label, $grouped, $options);
-        }
-
-        // If valueField is present and aggregation returned an array (SQL aggregated)
-        if (is_array($rows)) {
-            $grouped = $rows;
-
-            return $this->buildResponseFromGrouped($label, $grouped, $options);
-        }
-
-        // Otherwise $rows is a Collection of items with 'value'
-        $numeric = $rows->pluck('value')->filter(fn($v) => is_numeric($v))->count() > 0;
-
-        if ($numeric) {
-            // if rows is a Collection of raw values, group and possibly compute percentile/histogram
-            if ($rows instanceof Collection && (! empty($options['percentile']) || ! empty($options['histogram']))) {
-                $perBucket = $this->groupValuesByPeriod($rows, $period);
-
-                if (! empty($options['percentile'])) {
-                    $percent = (float) $options['percentile'];
-                    $grouped = array_map(fn($values) => $this->percentile($values, $percent), $perBucket);
-                } else {
-                    // histogram requested: compute histogram across all values
-                    $bins = (int) ($options['histogram']['bins'] ?? 10);
-                    if ($bins <= 0) { $bins = 10; }
-                    $hist = $this->histogram($rows->pluck('value')->filter()->values()->all(), $bins);
-
-                    $labels = array_keys($hist);
-                    $data = array_values($hist);
-
-                    $ds = new ChartDataSet($label, $data, 'bar', $this->visualOptions($options));
-                    return ['labels' => $labels, 'datasets' => [$ds->toChartJs()]];
-                }
-
-                $labels = array_keys($grouped);
-                $data = array_values($grouped);
-
-                $data = $this->maybeTransform($data, $options);
-
-                $ds = new ChartDataSet($label, $data, 'line', $this->visualOptions($options));
-                return ['labels' => $labels, 'datasets' => [$ds->toChartJs()]];
-            }
-
-            $grouped = $this->groupByPeriodSum($rows, $period);
-
-            return $this->buildResponseFromGrouped($label, $grouped, $options);
-        }
-
-        // Otherwise treat as categories -> pie or bar of categories
-        $categories = $rows->pluck('value')->filter()->values()->all();
-        $counts = array_count_values($categories);
-
-        // If few categories and small, return pie
-        if (count($counts) <= $maxPie) {
-            $labels = array_keys($counts);
-            $data = array_values($counts);
-
-            $ds = new ChartDataSet($label, $data, 'pie', $this->visualOptions($options));
-
-            return ['labels' => $labels, 'datasets' => [$ds->toChartJs()]];
-        }
-
-        // Fallback: return top categories as bar
-        arsort($counts);
-        $top = array_slice($counts, 0, $maxPie, true);
-
-        $labels = array_keys($top);
-        $data = array_values($top);
-
-        $ds = new ChartDataSet($label, $data, 'bar', $this->visualOptions($options));
-
-        return ['labels' => $labels, 'datasets' => [$ds->toChartJs()]];
+        return $rows;
     }
 
     private function visualOptions(array $options): array
@@ -255,16 +304,28 @@ final class ChartDataGenerator
             $wrappedDateColumn = $query->getQuery()->getGrammar()->wrap($dateColumn);
             $rows = $query->selectRaw("DATE_FORMAT({$wrappedDateColumn}, '{$format}') as bucket, COUNT(*) as cnt")->groupBy('bucket')->orderBy('bucket')->get();
 
-            return $rows->pluck('cnt', 'bucket')->map(fn($v) => (int) $v)->all();
+            return $rows->pluck('cnt', 'bucket')->map(fn ($v) => (int) $v)->all();
         }
 
-        // Fallback to PHP grouping
-        $dateKey = str_contains($dateColumn, '.') ? last(explode('.', $dateColumn)) : $dateColumn;
-        $rows = $query->get()->map(function ($item) use ($dateKey) {
-            return [ 'date' => Carbon::parse($item->{$dateKey}) ];
-        });
+        if (str_contains($driver, 'sqlite')) {
+            $format = match ($period) {
+                'month' => '%Y-%m',
+                'week' => '%Y-W%W',
+                'year' => '%Y',
+                default => '%Y-%m-%d',
+            };
 
-        return $this->groupByPeriod($rows, $period);
+            $grammar = $query->getQuery()->getGrammar();
+            $wrappedDateColumn = $grammar->wrap($dateColumn);
+            $rows = $query->selectRaw("strftime('{$format}', {$wrappedDateColumn}) as bucket, COUNT(*) as cnt")
+                ->groupByRaw("strftime('{$format}', {$wrappedDateColumn})")
+                ->orderBy('bucket')
+                ->get();
+
+            return $rows->pluck('cnt', 'bucket')->map(fn ($v) => (int) $v)->all();
+        }
+
+        return $this->aggregateCountByPeriodInPhp($query, $dateColumn, $period);
     }
 
     /**
@@ -288,20 +349,65 @@ final class ChartDataGenerator
             $wrappedValueField = $grammar->wrap($valueField);
             $rows = $query->selectRaw("DATE_FORMAT({$wrappedDateColumn}, '{$format}') as bucket, SUM({$wrappedValueField}) as s")->groupBy('bucket')->orderBy('bucket')->get();
 
-            return $rows->pluck('s', 'bucket')->map(fn($v) => (float) $v)->all();
+            return $rows->pluck('s', 'bucket')->map(fn ($v) => (float) $v)->all();
         }
 
-        $dateKey = str_contains($dateColumn, '.') ? last(explode('.', $dateColumn)) : $dateColumn;
-        $valueKey = str_contains($valueField, '.') ? last(explode('.', $valueField)) : $valueField;
+        if (str_contains($driver, 'sqlite')) {
+            $format = match ($period) {
+                'month' => '%Y-%m',
+                'week' => '%Y-W%W',
+                'year' => '%Y',
+                default => '%Y-%m-%d',
+            };
 
-        $rows = $query->get()->map(function ($item) use ($dateKey, $valueKey) {
-            return [
-                'date' => Carbon::parse($item->{$dateKey}),
-                'value' => $item->{$valueKey},
-            ];
+            $grammar = $query->getQuery()->getGrammar();
+            $wrappedDateColumn = $grammar->wrap($dateColumn);
+            $wrappedValueField = $grammar->wrap($valueField);
+            $rows = $query->selectRaw("strftime('{$format}', {$wrappedDateColumn}) as bucket, SUM({$wrappedValueField}) as s")
+                ->groupByRaw("strftime('{$format}', {$wrappedDateColumn})")
+                ->orderBy('bucket')
+                ->get();
+
+            return $rows->pluck('s', 'bucket')->map(fn ($v) => (float) $v)->all();
+        }
+
+        return $this->aggregateSumByPeriodInPhp($query, $dateColumn, $valueField, $period);
+    }
+
+    private function aggregateCountByPeriodInPhp(EloquentBuilder $query, string $dateColumn, string $period): array
+    {
+        $dateKey = str_contains($dateColumn, '.') ? last(explode('.', $dateColumn)) : $dateColumn;
+        $buckets = [];
+
+        $query->chunk(1000, function ($items) use (&$buckets, $dateKey, $period): void {
+            foreach ($items as $item) {
+                $key = $this->bucketKey(Carbon::parse($item->{$dateKey}), $period);
+                $buckets[$key] = ($buckets[$key] ?? 0) + 1;
+            }
         });
 
-        return $this->groupByPeriodSum($rows, $period);
+        ksort($buckets);
+
+        return $buckets;
+    }
+
+    private function aggregateSumByPeriodInPhp(EloquentBuilder $query, string $dateColumn, string $valueField, string $period): array
+    {
+        $dateKey = str_contains($dateColumn, '.') ? last(explode('.', $dateColumn)) : $dateColumn;
+        $valueKey = str_contains($valueField, '.') ? last(explode('.', $valueField)) : $valueField;
+        $buckets = [];
+
+        $query->chunk(1000, function ($items) use (&$buckets, $dateKey, $valueKey, $period): void {
+            foreach ($items as $item) {
+                $key = $this->bucketKey(Carbon::parse($item->{$dateKey}), $period);
+                $val = is_numeric($item->{$valueKey}) ? $item->{$valueKey} + 0 : 0;
+                $buckets[$key] = ($buckets[$key] ?? 0) + $val;
+            }
+        });
+
+        ksort($buckets);
+
+        return $buckets;
     }
 
     private function shortClass(string $fqcn): string
@@ -431,8 +537,8 @@ final class ChartDataGenerator
             return $values[(int)$k];
         }
 
-        $d0 = $values[$f] * ($c - $k);
-        $d1 = $values[$c] * ($k - $f);
+        $d0 = $values[(int) $f] * ($c - $k);
+        $d1 = $values[(int) $c] * ($k - $f);
 
         return $d0 + $d1;
     }

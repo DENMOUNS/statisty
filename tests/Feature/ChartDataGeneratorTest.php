@@ -7,6 +7,7 @@ namespace Statisty\Tests\Feature;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Statisty\Charts\ChartDataGenerator;
 use Statisty\Tests\TestCase;
 
@@ -23,7 +24,7 @@ class ChartDataGeneratorTest extends TestCase
             $table->timestamp('created_at')->nullable();
         });
 
-        \DB::table('events')->insert([
+        DB::table('events')->insert([
             ['category' => 'a', 'value' => 10, 'created_at' => now()->subDays(2)],
             ['category' => 'b', 'value' => 5, 'created_at' => now()->subDays(1)],
             ['category' => 'a', 'value' => 7, 'created_at' => now()],
@@ -63,5 +64,22 @@ class ChartDataGeneratorTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         (new ChartDataGenerator())->generateFromModel(get_class($model), 'value) from events --', 'created_at');
+    }
+
+    public function test_sqlite_uses_native_grouping_for_period_count()
+    {
+        $model = new class extends Model {
+            protected $table = 'events';
+            public $timestamps = false;
+        };
+
+        $generator = new ChartDataGenerator();
+        $query = $model->newQuery();
+
+        $method = new \ReflectionMethod(ChartDataGenerator::class, 'aggregateCountByPeriod');
+        $method->setAccessible(true);
+        $method->invoke($generator, $query, 'events.created_at', 'day');
+
+        $this->assertStringContainsString('strftime', $query->toSql());
     }
 }

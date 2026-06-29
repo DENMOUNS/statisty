@@ -17,7 +17,7 @@ final class ProfilingCache
         return sprintf('%s:profiling:%s', $this->workspacePrefix, ltrim($model, '\\'));
     }
 
-    public function remember(string $model, callable $callback, int $ttl = 300)
+    public function remember(string $model, callable $callback, int $ttl = 300): mixed
     {
         $key = $this->key($model);
 

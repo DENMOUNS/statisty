@@ -240,9 +240,36 @@ final class DocController extends BaseDashboardController
     private function extractFormRequestRules(string $formRequestClass): array
     {
         $rulesList = [];
+
         try {
-            // Instantiate FormRequest dynamically (avoid invoking HTTP request dependencies)
-            $request = new $formRequestClass();
+            $currentRequest = app(Request::class);
+        } catch (Throwable $e) {
+            $currentRequest = Request::createFromGlobals();
+        }
+
+        try {
+            $request = app()->make($formRequestClass);
+
+            if ($request instanceof \Illuminate\Foundation\Http\FormRequest) {
+                $request->setContainer(app());
+
+                if (app()->bound('redirect')) {
+                    $request->setRedirector(app('redirect'));
+                }
+
+                $request->setRouteResolver(fn () => $currentRequest->route());
+                $request->setUserResolver(fn () => $currentRequest->user());
+                $request->initialize(
+                    $currentRequest->query->all(),
+                    $currentRequest->request->all(),
+                    $currentRequest->attributes->all(),
+                    $currentRequest->cookies->all(),
+                    $currentRequest->files->all(),
+                    $currentRequest->server->all(),
+                    $currentRequest->getContent(),
+                );
+            }
+
             if (method_exists($request, 'rules')) {
                 $rules = $request->rules();
                 foreach ($rules as $field => $fieldRules) {
@@ -252,7 +279,6 @@ final class DocController extends BaseDashboardController
                         $ruleStr = (string) $fieldRules;
                     }
 
-                    // Simple check to determine if the field is required
                     $isRequired = str_contains($ruleStr, 'required');
 
                     $rulesList[] = [

@@ -30,8 +30,28 @@ final class WorkflowController extends BaseDashboardController
 
         try {
             $columns        = ModelSchema::visibleColumns($modelClass);
-            $numericColumns = ModelSchema::semanticNumericColumns($modelClass);
-            $statusColumns  = ModelSchema::semanticStatusColumns($modelClass);
+
+            // Avoid duplicate schema lookups: compute semantic columns from the
+            // already fetched visible columns instead of calling helpers that
+            // would trigger another getColumnListing().
+            $numericColumns = array_values(array_filter($columns, function (string $col): bool {
+                $lower = strtolower($col);
+                foreach (['amount', 'total', 'price', 'quantity', 'value', 'points', 'sum', 'count', 'score', 'total_amount', 'subtotal', 'revenue', 'cost', 'fee', 'tax', 'discount', 'weight', 'balance', 'salary', 'rate'] as $keyword) {
+                    if ($lower === $keyword || str_contains($lower, $keyword)) {
+                        return true;
+                    }
+                }
+                return false;
+            }));
+
+            $statusColumns = array_values(array_filter($columns, function (string $col): bool {
+                $lower = strtolower($col);
+                return in_array($lower, ['status', 'state', 'stage', 'phase', 'type', 'kind', 'category', 'role', 'priority', 'level'], true)
+                    || str_ends_with($lower, '_status')
+                    || str_ends_with($lower, '_state')
+                    || str_ends_with($lower, '_type')
+                    || str_ends_with($lower, '_stage');
+            }));
             $tableName      = (new $modelClass())->getTable();
 
             // ─── FIX 2a : une seule requête agrégée pour count + toutes les sommes/moyennes ──

@@ -6,6 +6,7 @@ namespace Statisty\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Statisty\Core\StatistyManager;
 use Statisty\Support\ModelName;
@@ -190,7 +191,7 @@ final class DashboardController extends BaseDashboardController
     // Heatmap
     // ─────────────────────────────────────────────────────────────────────────
 
-    private function getActivityHeatmapData(array $models, string $selectedYear): array
+    private function getActivityHeatmapData(array $models, string $selectedYear)
     {
         $data = [];
         $now  = Carbon::now()->endOfDay();
@@ -213,6 +214,23 @@ final class DashboardController extends BaseDashboardController
             $endDate   = $now;
         }
 
+        $query = $this->buildActivityHeatmapQuery($models, $startDate, $endDate);
+
+        if ($query !== null) {
+            try {
+                foreach ($query->get() as $row) {
+                    $date = $row->date;
+                    $data[$date] = ($data[$date] ?? 0) + (int) $row->count;
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+    }
+
+    private function buildActivityHeatmapQuery(array $models, Carbon $startDate, Carbon $endDate)
+    {
+        $union = null;
+
         foreach ($models as $model) {
             if (! method_exists($model, 'query')) {
                 continue;
@@ -224,19 +242,30 @@ final class DashboardController extends BaseDashboardController
                     continue;
                 }
 
-                $query = $model::query()
+                $builder = $model::query()
                     ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
                     ->whereBetween('created_at', [$startDate, $endDate])
                     ->groupBy('date')
-                    ->get();
+                    ->toBase();
 
-                foreach ($query as $row) {
-                    $date = $row->date;
-                    $data[$date] = ($data[$date] ?? 0) + (int) $row->count;
+                if ($union === null) {
+                    $union = $builder;
+                } else {
+                    $union = $union->unionAll($builder);
                 }
             } catch (\Throwable $e) {
             }
         }
+
+        if ($union === null) {
+            return null;
+        }
+
+        return DB::query()
+            ->fromSub($union, 'activity_heatmap')
+            ->selectRaw('date, SUM(count) as count')
+            ->groupBy('date')
+            ->orderBy('date');
 
         $heatmapSeries = [];
         $current       = $startDate->copy();

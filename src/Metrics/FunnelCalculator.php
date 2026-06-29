@@ -65,82 +65,44 @@ final class FunnelCalculator
         $segmentBy = $options['segment_by'] ?? null;
         $segments = [];
 
+        // columns to select for per-step scans
+        $cols = [$distinctBy, $dateColumn];
+        if (is_string($segmentBy) && ModelSchema::isVisibleColumn($modelClass, $segmentBy)) {
+            $cols[] = $segmentBy;
+        }
+
         foreach ($steps as $index => $step) {
             if ($index === 0) {
-                $query = $modelClass::query();
-                $this->applyBaseConstraints($query, $options, $dateColumn);
-                if (! $this->applyStep($query, $step)) {
-                    $completed[] = ['step' => 1, 'count' => 0];
-                    $previousCompletions = [];
-                    continue;
-                }
-
-                $cols = [$distinctBy, $dateColumn];
-                if (is_string($segmentBy) && ModelSchema::isVisibleColumn($modelClass, $segmentBy)) {
-                    $cols[] = $segmentBy;
-                }
-
-                $rows = $query->orderBy($dateColumn)->get($cols);
-                foreach ($rows as $row) {
-                    $identity = $row->{$distinctBy};
-                    if ($identity === null || isset($previousCompletions[(string) $identity])) {
-                        continue;
-                    }
-
-                    $previousCompletions[(string) $identity] = Carbon::parse($row->{$dateColumn});
-
-                    if (isset($row->{$segmentBy})) {
-                        $segments[(string) $row->{$segmentBy}][] = (string) $identity;
-                    }
-                }
+                $previousCompletions = $this->collectFirstStepCompletions(
+                    $modelClass,
+                    $cols,
+                    $options,
+                    $step,
+                    $distinctBy,
+                    $dateColumn,
+                    $segmentBy,
+                    $segments
+                );
 
                 $completed[] = ['step' => 1, 'count' => count($previousCompletions)];
                 continue;
             }
 
-            $currentCompletions = [];
-            foreach ($previousCompletions as $identity => $after) {
-                $query = $modelClass::query()->where($distinctBy, $identity);
+            $current = $this->processStepForIdentities(
+                $modelClass,
+                $cols,
+                $options,
+                $step,
+                $distinctBy,
+                $dateColumn,
+                $previousCompletions,
+                $windowSeconds,
+                $strict,
+                $segmentBy,
+                $segments
+            );
 
-                // apply ordering constraint
-                if ($strict) {
-                    $query->where($dateColumn, '>', $after);
-                } else {
-                    $query->where($dateColumn, '>=', $after);
-                }
-
-                // apply conversion window if set
-                if ($windowSeconds > 0) {
-                    $limit = $after->copy()->addSeconds($windowSeconds);
-                    $query->where($dateColumn, '<=', $limit);
-                }
-
-                $this->applyBaseConstraints($query, $options, $dateColumn);
-                if (! $this->applyStep($query, $step)) {
-                    // optional step handling
-                    if (! empty($step['optional'])) {
-                        // carry forward identity without changing timestamp
-                        $currentCompletions[$identity] = $after;
-                    }
-
-                    continue;
-                }
-
-                $cols = [$distinctBy, $dateColumn];
-                if (is_string($segmentBy) && ModelSchema::isVisibleColumn($modelClass, $segmentBy)) {
-                    $cols[] = $segmentBy;
-                }
-
-                $row = $query->orderBy($dateColumn)->first($cols);
-                if ($row !== null) {
-                    $currentCompletions[$identity] = Carbon::parse($row->{$dateColumn});
-                    if (isset($row->{$segmentBy})) {
-                        $segments[(string) $row->{$segmentBy}][] = (string) $identity;
-                    }
-                }
-            }
-
-            $previousCompletions = $currentCompletions;
+            $previousCompletions = $current;
             $completed[] = ['step' => $index + 1, 'count' => count($previousCompletions)];
         }
 
@@ -165,6 +127,116 @@ final class FunnelCalculator
         }
 
         return ModelSchema::isVisibleColumn($modelClass, 'user_id') ? 'user_id' : null;
+    }
+
+    /**
+     * Collect earliest completion per identity for the first step using chunking.
+     * Returns array identity => Carbon(timestamp)
+     */
+    private function collectFirstStepCompletions(string $modelClass, array $cols, array $options, array $step, string $distinctBy, string $dateColumn, ?string $segmentBy, array &$segments): array
+    {
+        $out = [];
+
+        $query = $modelClass::query();
+        $this->applyBaseConstraints($query, $options, $dateColumn);
+        if (! $this->applyStep($query, $step)) {
+            return [];
+        }
+
+        $query->orderBy($distinctBy)->orderBy($dateColumn)->select($cols);
+
+        $query->chunk(1000, function ($items) use (&$out, $distinctBy, $dateColumn, $segmentBy, &$segments) {
+            foreach ($items as $row) {
+                $id = (string) $row->{$distinctBy};
+                if ($id === '' || isset($out[$id])) {
+                    continue;
+                }
+
+                $out[$id] = Carbon::parse($row->{$dateColumn});
+                if ($segmentBy && isset($row->{$segmentBy})) {
+                    $segments[(string) $row->{$segmentBy}][] = $id;
+                }
+            }
+        });
+
+        return $out;
+    }
+
+    /**
+     * Process an intermediate step by scanning rows for the provided identities in chunks.
+     * Returns array identity => Carbon(timestamp) for identities that match the step.
+     */
+    private function processStepForIdentities(string $modelClass, array $cols, array $options, array $step, string $distinctBy, string $dateColumn, array $previousCompletions, int $windowSeconds, bool $strict, ?string $segmentBy, array &$segments): array
+    {
+        $result = [];
+
+        if (empty($previousCompletions)) {
+            return [];
+        }
+
+        $ids = array_keys($previousCompletions);
+
+        $query = $modelClass::query();
+        $this->applyBaseConstraints($query, $options, $dateColumn);
+        if (! $this->applyStep($query, $step)) {
+            // optional: carry previous forward
+            if (! empty($step['optional'])) {
+                return $previousCompletions;
+            }
+
+            return [];
+        }
+
+        $query->whereIn($distinctBy, $ids)->orderBy($distinctBy)->orderBy($dateColumn)->select($cols);
+
+        $prevMap = $previousCompletions;
+        $window = $windowSeconds;
+        $strictFlag = $strict;
+
+        $query->chunk(1000, function ($items) use (&$result, &$prevMap, $distinctBy, $dateColumn, $segmentBy, $window, $strictFlag, &$segments) {
+            foreach ($items as $row) {
+                $identity = (string) $row->{$distinctBy};
+                if (! isset($prevMap[$identity]) || isset($result[$identity])) {
+                    continue;
+                }
+
+                $dt = Carbon::parse($row->{$dateColumn});
+                $after = $prevMap[$identity];
+
+                if ($strictFlag) {
+                    if (! $dt->gt($after)) {
+                        continue;
+                    }
+                } else {
+                    if ($dt->lt($after)) {
+                        continue;
+                    }
+                }
+
+                if ($window > 0) {
+                    $limit = $after->copy()->addSeconds($window);
+                    if ($dt->gt($limit)) {
+                        continue;
+                    }
+                }
+
+                $result[$identity] = $dt;
+                if ($segmentBy && isset($row->{$segmentBy})) {
+                    $segments[(string) $row->{$segmentBy}][] = $identity;
+                }
+            }
+        });
+
+        // optional: carry forward identities that didn't match this step
+        if (! empty($step['optional'])) {
+            foreach ($previousCompletions as $id => $ts) {
+                if (! isset($result[$id])) {
+                    $result[$id] = $ts;
+                }
+            }
+        }
+
+        return $result;
     }
 
     private function applyBaseConstraints(EloquentBuilder $query, array $options, string $dateColumn): void

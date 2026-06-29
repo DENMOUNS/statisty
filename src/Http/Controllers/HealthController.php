@@ -4,22 +4,39 @@ declare(strict_types=1);
 
 namespace Statisty\Http\Controllers;
 
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 final class HealthController extends BaseDashboardController
 {
-    public function health(Request $request)
+    public function health(Request $request): View|JsonResponse
     {
+        $connection = DB::connection();
+        $wasLogging = false;
+
         try {
-            \DB::connection()->enableQueryLog();
-        } catch (\Throwable $e) {}
+            $wasLogging = $connection->logging();
+            if (! $wasLogging) {
+                $connection->enableQueryLog();
+            }
+        } catch (\Throwable $e) {
+        }
 
         $checks = $this->healthChecks();
 
         try {
-            $queriesCount = count(\DB::connection()->getQueryLog());
+            $queriesCount = count($connection->getQueryLog());
             $checks[] = $this->healthCheck('Report SQL Queries', $queriesCount . ' queries executed', 'ready');
         } catch (\Throwable $e) {
+        } finally {
+            try {
+                if (! $wasLogging) {
+                    $connection->flushQueryLog();
+                }
+            } catch (\Throwable $e) {
+            }
         }
 
         $slowQueries = array_merge($this->currentRequestSlowQueries(), $this->loadPersistedSlowQueries());
@@ -57,8 +74,8 @@ final class HealthController extends BaseDashboardController
         $currentQueries = [];
 
         try {
-            $queryLog = \DB::connection()->getQueryLog();
-            $connectionName = \DB::connection()->getName();
+            $queryLog = DB::connection()->getQueryLog();
+            $connectionName = DB::connection()->getName();
 
             foreach ($queryLog as $entry) {
                 if (! isset($entry['time']) || (float) $entry['time'] < $threshold) {
@@ -144,7 +161,7 @@ final class HealthController extends BaseDashboardController
     private function databaseHealth(): array
     {
         try {
-            \DB::connection()->getPdo();
+            DB::connection()->getPdo();
 
             return $this->healthCheck('Database', (string) config('database.default'), 'ready');
         } catch (\Throwable $exception) {

@@ -42,14 +42,14 @@ final class ChartController extends Controller
             $period = $request->query('period', $definitionOptions['period'] ?? 'day');
             $dateColumn = $definitionOptions['date_column'] ?? config('statisty.charts.default_date_column', 'created_at');
 
-            $from = $request->query('date_from', $definitionOptions['from'] ?? null);
-            $to = $request->query('date_to', $definitionOptions['to'] ?? null);
+            $from = $definitionOptions['from'] ?? $request->query('date_from', null);
+            $to = $definitionOptions['to'] ?? $request->query('date_to', null);
 
-            $result = $generator->generateFromModel($model, $value ?: null, $dateColumn, array_merge($definitionOptions, [
+            $result = $generator->generateFromModel($model, $value ?: null, $dateColumn, array_merge([
                 'period' => $period,
                 'from' => $from,
                 'to' => $to,
-            ]));
+            ], $definitionOptions));
 
             return response()->json($result);
         } catch (\Throwable $e) {

@@ -32,23 +32,31 @@ final class CohortAnalyzer
             return $this->analyzeCountsOnly($modelClass, $dateColumn, $period, $periods);
         }
 
-        $all = $modelClass::query()->orderBy($activityDateColumn)->get()->map(function ($item) use ($activityDateColumn, $identityColumn) {
-            return [
-                'identity' => $item->{$identityColumn} ?? null,
-                'date' => Carbon::parse($item->{$activityDateColumn}),
-            ];
-        })->filter(fn($row) => $row['identity'] !== null)->values();
+        $firstSeenByIdentity = [];
+        $activityByIdentity = [];
 
-        if ($all->isEmpty()) {
-            return ['labels' => [], 'matrix' => [], 'sizes' => []];
+        $query = $modelClass::query()
+            ->select([$identityColumn, $activityDateColumn])
+            ->orderBy($activityDateColumn);
+
+        foreach ($query->cursor() as $item) {
+            $identity = $item->{$identityColumn} ?? null;
+            if ($identity === null) {
+                continue;
+            }
+
+            $date = Carbon::parse($item->{$activityDateColumn});
+            $key = (string) $identity;
+
+            if (! isset($firstSeenByIdentity[$key]) || $date->lessThan($firstSeenByIdentity[$key])) {
+                $firstSeenByIdentity[$key] = $date;
+            }
+
+            $activityByIdentity[$key][$this->bucketKey($date, $period)] = true;
         }
 
-        $firstSeenByIdentity = [];
-        foreach ($all as $row) {
-            $key = (string) $row['identity'];
-            if (! isset($firstSeenByIdentity[$key]) || $row['date']->lessThan($firstSeenByIdentity[$key])) {
-                $firstSeenByIdentity[$key] = $row['date'];
-            }
+        if ($firstSeenByIdentity === []) {
+            return ['labels' => [], 'matrix' => [], 'sizes' => []];
         }
 
         $cohorts = [];
@@ -57,11 +65,6 @@ final class CohortAnalyzer
         }
 
         ksort($cohorts);
-
-        $activityByIdentity = [];
-        foreach ($all as $row) {
-            $activityByIdentity[(string) $row['identity']][$this->bucketKey($row['date'], $period)] = true;
-        }
 
         $labels = array_keys($cohorts);
         $matrix = [];
@@ -109,19 +112,24 @@ final class CohortAnalyzer
 
     private function analyzeCountsOnly(string $modelClass, string $dateColumn, string $period, int $periods): array
     {
-        $all = $modelClass::query()->orderBy($dateColumn)->get()->map(function ($item) use ($dateColumn) {
-            return ['date' => Carbon::parse($item->{$dateColumn})];
-        });
+        $buckets = [];
+        $starts = [];
 
-        if ($all->isEmpty()) {
-            return ['labels' => [], 'matrix' => []];
+        $query = $modelClass::query()
+            ->select([$dateColumn])
+            ->orderBy($dateColumn);
+
+        foreach ($query->cursor() as $item) {
+            $date = Carbon::parse($item->{$dateColumn});
+            $key = $this->bucketKey($date, $period);
+            $buckets[$key][] = $date;
+            if (! isset($starts[$key])) {
+                $starts[$key] = $date;
+            }
         }
 
-        // build cohort buckets
-        $buckets = [];
-        foreach ($all as $row) {
-            $key = $this->bucketKey($row['date'], $period);
-            $buckets[$key][] = $row['date'];
+        if ($buckets === []) {
+            return ['labels' => [], 'matrix' => []];
         }
 
         ksort($buckets);
@@ -131,15 +139,21 @@ final class CohortAnalyzer
 
         // For each cohort, compute counts in cohort and next N-1 periods
         foreach ($labels as $label) {
-            $cohortStartDates = $buckets[$label];
+            $cohortDates = $buckets[$label];
             $rowCounts = [];
-            $start = reset($cohortStartDates);
+            $start = reset($cohortDates);
 
             for ($p = 0; $p < max(1, $periods); $p++) {
                 $startPeriod = $this->periodStart($start, $period, $p);
                 $endPeriod = $this->periodStart($start, $period, $p + 1);
 
-                $count = $all->filter(fn($r) => $r['date']->greaterThanOrEqualTo($startPeriod) && $r['date']->lessThan($endPeriod))->count();
+                $count = 0;
+                foreach ($cohortDates as $date) {
+                    if ($date->greaterThanOrEqualTo($startPeriod) && $date->lessThan($endPeriod)) {
+                        $count++;
+                    }
+                }
+
                 $rowCounts[] = $count;
             }
 

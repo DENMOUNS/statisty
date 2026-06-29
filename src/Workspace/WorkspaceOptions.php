@@ -28,7 +28,7 @@ final class WorkspaceOptions
             dateColumn: $options['date_column'] ?? $this->dateColumn,
             dateFrom: $options['date_from'] ?? $this->dateFrom,
             dateTo: $options['date_to'] ?? $this->dateTo,
-            filters: $options['filters'] ?? $this->filters,
+            filters: array_merge($this->filters, $options['filters'] ?? []),
             features: array_replace($this->features, $options['features'] ?? []),
             strictModelValidation: $options['strict_model_validation'] ?? $this->strictModelValidation,
         );

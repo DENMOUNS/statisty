@@ -134,8 +134,13 @@ final class MetricsController extends Controller
                 }
                 $field = $definition['field'] ?? $definitionOptions['field'] ?? $request->query('field');
 
-                $kpi = new KpiDefinition(name: ucfirst($type) . ' of ' . $model, type: $type, model: $model, field: $field, options: $options);
-
+                $kpi = new KpiDefinition(
+                    name: ucfirst($type) . ' of ' . $model,
+                    model: $model,
+                    type: $type,
+                    field: $field,
+                );
+                
                 // caching when enabled in workspace options and ProfilingCache available
                 $ttl = $workspace->options->cacheTtl;
                 $cacheKeyModel = $model . ':' . md5(serialize([$type, $field, $options]));
