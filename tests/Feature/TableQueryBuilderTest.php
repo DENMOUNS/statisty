@@ -7,6 +7,7 @@ namespace Statisty\Tests\Feature;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Statisty\Tables\TableQueryBuilder;
 use Statisty\Tests\TestCase;
 
@@ -31,12 +32,12 @@ class TableQueryBuilderTest extends TestCase
             $table->string('email')->nullable();
             $table->string('password')->nullable();
         });
-        \DB::table('test_users')->insert([
+        DB::table('test_users')->insert([
             ['id' => 1, 'email' => 'a@example.test', 'password' => 'hidden'],
             ['id' => 2, 'email' => 'b@example.test', 'password' => 'hidden'],
         ]);
 // insert some rows
-        \DB::table('test_models')->insert([
+        DB::table('test_models')->insert([
             ['user_id' => 1, 'name' => 'a', 'password' => 'x', 'secret' => 's', 'created_at' => now(), 'updated_at' => now()],
             ['user_id' => 2, 'name' => 'b', 'password' => 'y', 'secret' => 't', 'created_at' => now(), 'updated_at' => now()],
         ]);

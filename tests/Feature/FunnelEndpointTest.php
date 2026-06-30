@@ -7,6 +7,7 @@ namespace Statisty\Tests\Feature;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Statisty\Tests\TestCase;
 
 class FunnelEndpointTest extends TestCase
@@ -23,7 +24,7 @@ class FunnelEndpointTest extends TestCase
         });
 
         // user 1: steps A then B
-        \DB::table('funnel_events')->insert([
+        DB::table('funnel_events')->insert([
             ['user_id' => 1, 'step' => 'A', 'created_at' => now()->subDays(3)],
             ['user_id' => 1, 'step' => 'B', 'created_at' => now()->subDays(2)],
             // user 2: only A

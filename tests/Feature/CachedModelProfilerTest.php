@@ -6,7 +6,7 @@ namespace Statisty\Tests\Feature;
 
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Statisty\Discovery\ModelProfiler;
 use Statisty\Discovery\CachedModelProfiler;
 use Statisty\Cache\ProfilingCache;
@@ -33,7 +33,7 @@ class CachedModelProfilerTest extends TestCase
 
     public function test_cached_profiler_writes_to_cache()
     {
-        $conn = \DB::connection();
+        $conn = DB::connection();
         $prof = new ModelProfiler($conn);
         $cache = new ProfilingCache(cache()->store());
 

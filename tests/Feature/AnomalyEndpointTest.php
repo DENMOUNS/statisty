@@ -7,6 +7,7 @@ namespace Statisty\Tests\Feature;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Statisty\Tests\TestCase;
 
 class AnomalyEndpointTest extends TestCase
@@ -22,7 +23,7 @@ class AnomalyEndpointTest extends TestCase
         });
 
         // create normal values and one outlier
-        \DB::table('anomaly_events')->insert([
+        DB::table('anomaly_events')->insert([
             ['value' => 10, 'created_at' => now()->subDays(3)],
             ['value' => 12, 'created_at' => now()->subDays(2)],
             ['value' => 11, 'created_at' => now()->subDays(1)],

@@ -7,6 +7,7 @@ namespace Statisty\Tests\Feature;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Statisty\Tests\TestCase;
 
 class CohortEndpointTest extends TestCase
@@ -22,7 +23,7 @@ class CohortEndpointTest extends TestCase
         });
 
         // create events across days
-        \DB::table('cohort_events')->insert([
+        DB::table('cohort_events')->insert([
             ['user_id' => 1, 'created_at' => now()->subDays(6)],
             ['user_id' => 2, 'created_at' => now()->subDays(6)],
             ['user_id' => 3, 'created_at' => now()->subDays(3)],
