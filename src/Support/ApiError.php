@@ -14,7 +14,7 @@ final class ApiError
         'server_error' => 500,
     ];
 
-    public static function response(string $code, int $status = null, array $extra = [])
+    public static function response(string $code, ?int $status = null, array $extra = [])
     {
         $status = $status ?? (self::MAPPINGS[$code] ?? 400);
 

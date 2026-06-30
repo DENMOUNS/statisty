@@ -61,11 +61,14 @@ final class StatistyServiceProvider extends ServiceProvider
         $this->app->singleton(ModelProfiler::class, function ($app) {
             $profiler = new ModelProfiler($app['db']);
 
-            if ($app->bound(ProfilingCache::class)) {
-                return new \Statisty\Discovery\CachedModelProfiler($profiler, $app->make(ProfilingCache::class));
+            try {
+                return new \Statisty\Discovery\CachedModelProfiler(
+                    $profiler,
+                    $app->make(ProfilingCache::class),
+                );
+            } catch (\Throwable) {
+                return $profiler;
             }
-
-            return $profiler;
         });
 
         $this->app->singleton(TableInspector::class, fn($app) => new TableInspector($app['db']));
@@ -89,8 +92,6 @@ final class StatistyServiceProvider extends ServiceProvider
             } catch (\Throwable) {
             }
         }
-
-        $this->loadRoutesFrom(__DIR__ . '/../../routes/statisty.php');
 
         $this->publishes([
             __DIR__ . '/../../config/statisty.php' => config_path('statisty.php'),
@@ -118,12 +119,23 @@ final class StatistyServiceProvider extends ServiceProvider
             ]);
         }
 
-        $this->bootSlowQueryListener();
+        $this->booted(function (): void {
+            $this->loadRoutesFrom(__DIR__ . '/../../routes/statisty.php');
+            $this->bootSlowQueryListener();
+        });
     }
 
     private function bootSlowQueryListener(): void
     {
         if (! config('statisty.features.slow_queries.enabled', true)) {
+            return;
+        }
+
+        if (! $this->app->bound('db')) {
+            return;
+        }
+
+        if ($this->app->runningInConsole() && ! $this->hasDatabaseConnectionConfigured()) {
             return;
         }
 
@@ -147,7 +159,8 @@ final class StatistyServiceProvider extends ServiceProvider
                 $caller = 'Unknown';
                 $trace  = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
                 foreach ($trace as $step) {
-                    if (isset($step['file'])
+                    if (
+                        isset($step['file'])
                         && ! str_contains($step['file'], 'vendor\\')
                         && ! str_contains($step['file'], 'vendor/')
                     ) {
@@ -181,6 +194,21 @@ final class StatistyServiceProvider extends ServiceProvider
         } catch (\Throwable $e) {
             // continuer
         }
+    }
+
+    private function hasDatabaseConnectionConfigured(): bool
+    {
+        $connectionName = config('database.default');
+        if (! is_string($connectionName) || $connectionName === '') {
+            return false;
+        }
+
+        $config = config('database.connections.' . $connectionName);
+        if (! is_array($config)) {
+            return false;
+        }
+
+        return ! empty($config['driver']);
     }
 
     private function appendSlowQuery(array $entry): void

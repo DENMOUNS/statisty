@@ -56,7 +56,7 @@ final class EloquentKpiCalculator implements KpiCalculatorContract
                 $group = $kpi->options['group_by'];
                 $grouped = $query->groupBy($group)->get()->mapWithKeys(function ($row) use ($group, $kpi) {
                     return [$row->{$group} => match ($kpi->type) {
-                        MetricType::COUNT => (int) $row->count ?? 0,
+                        MetricType::COUNT => (int) ($row->count ?? 0),
                         default => $row->{$kpi->field} ?? null,
                     }];
                 })->toArray();

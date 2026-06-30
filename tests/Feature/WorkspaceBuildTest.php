@@ -9,6 +9,13 @@ use Statisty\Tests\TestCase;
 
 final class WorkspaceBuildTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config()->set('statisty.pagination.default', 250);
+    }
+
     public function test_it_builds_a_serializable_workspace_dashboard(): void
     {
         $dashboard = Statisty::workspace('business')

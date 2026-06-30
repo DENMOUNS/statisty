@@ -139,11 +139,13 @@ final class DashboardController extends BaseDashboardController
         $metrics = [];
 
         foreach ($cols as $col) {
-            if (in_array(strtolower($col), [
+            if (
+                in_array(strtolower($col), [
                 'amount', 'total', 'price', 'quantity', 'value', 'points',
                 'sum', 'count', 'score', 'total_amount', 'subtotal', 'revenue',
                 'cost', 'fee', 'tax', 'discount', 'weight', 'balance',
-            ], true)) {
+                ], true)
+            ) {
                 $metrics[] = ucwords(str_replace(['_', 'Items'], [' ', ' Items'], $relationName))
                     . ' (' . ucwords(str_replace('_', ' ', $col)) . ')';
             }
@@ -225,6 +227,26 @@ final class DashboardController extends BaseDashboardController
             } catch (\Throwable $e) {
             }
         }
+
+        $heatmapSeries = [];
+        $current = $startDate->copy();
+        $weekIndex = 0;
+
+        while ($current <= $endDate) {
+            $dateStr = $current->format('Y-m-d');
+            $count = $data[$dateStr] ?? 0;
+            $y = $current->dayOfWeekIso - 1;
+
+            $heatmapSeries[] = [$weekIndex, $y, $count, $dateStr];
+
+            if ($y === 6) {
+                $weekIndex++;
+            }
+
+            $current->addDay();
+        }
+
+        return $heatmapSeries;
     }
 
     private function buildActivityHeatmapQuery(array $models, Carbon $startDate, Carbon $endDate)
@@ -266,26 +288,6 @@ final class DashboardController extends BaseDashboardController
             ->selectRaw('date, SUM(count) as count')
             ->groupBy('date')
             ->orderBy('date');
-
-        $heatmapSeries = [];
-        $current       = $startDate->copy();
-        $weekIndex     = 0;
-
-        while ($current <= $endDate) {
-            $dateStr = $current->format('Y-m-d');
-            $count   = $data[$dateStr] ?? 0;
-            $y       = $current->dayOfWeekIso - 1;
-
-            $heatmapSeries[] = [$weekIndex, $y, $count, $dateStr];
-
-            if ($y === 6) {
-                $weekIndex++;
-            }
-
-            $current->addDay();
-        }
-
-        return $heatmapSeries;
     }
 
     private function availableHeatmapYears(array $models): array

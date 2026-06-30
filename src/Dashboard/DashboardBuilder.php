@@ -36,40 +36,64 @@ final class DashboardBuilder
 
     public function build(WorkspaceDefinition $workspace): Dashboard
     {
-        $build = function () use ($workspace): Dashboard {
-            $this->dispatch(new DashboardBuilding($workspace));
-
-            $dashboard = new Dashboard(
-                workspace: $workspace,
-                kpis: $workspace->featureEnabled('kpis')
-                    ? $this->calculateKpis($this->kpiGenerator->generate($workspace), $workspace)
-                    : [],
-                charts: $workspace->featureEnabled('charts')
-                    ? $this->chartGenerator->generate($workspace)
-                    : [],
-                tables: $workspace->featureEnabled('tables')
-                    ? $this->tableBuilder->build($workspace)
-                    : [],
-                relationships: $workspace->featureEnabled('relationship_discovery')
-                    ? $this->relationshipDiscovery->discover($workspace)
-                    : [],
-                funnels: $workspace->customFunnels,
-                cohorts: $workspace->customCohorts,
-            );
-
-            $this->dispatch(new DashboardBuilt($dashboard));
-
-            return $dashboard;
-        };
-
         if (! $workspace->options->cacheEnabled) {
-            return $build();
+            return $this->buildDashboard($workspace);
         }
 
-        return $this->cache->remember(
+        $payload = $this->cache->remember(
             DashboardCacheKey::for($workspace),
             $workspace->options->cacheTtl,
-            $build,
+            fn () => $this->buildDashboard($workspace)->toArray(),
+        );
+
+        if ($payload instanceof Dashboard) {
+            return $payload;
+        }
+
+        if (is_array($payload)) {
+            return self::dashboardFromArray($payload, $workspace);
+        }
+
+        return $this->buildDashboard($workspace);
+    }
+
+    private function buildDashboard(WorkspaceDefinition $workspace): Dashboard
+    {
+        $this->dispatch(new DashboardBuilding($workspace));
+
+        $dashboard = new Dashboard(
+            workspace: $workspace,
+            kpis: $workspace->featureEnabled('kpis')
+                ? $this->calculateKpis($this->kpiGenerator->generate($workspace), $workspace)
+                : [],
+            charts: $workspace->featureEnabled('charts')
+                ? $this->chartGenerator->generate($workspace)
+                : [],
+            tables: $workspace->featureEnabled('tables')
+                ? $this->tableBuilder->build($workspace)
+                : [],
+            relationships: $workspace->featureEnabled('relationship_discovery')
+                ? $this->relationshipDiscovery->discover($workspace)
+                : [],
+            funnels: $workspace->customFunnels,
+            cohorts: $workspace->customCohorts,
+        );
+
+        $this->dispatch(new DashboardBuilt($dashboard));
+
+        return $dashboard;
+    }
+
+    private static function dashboardFromArray(array $payload, WorkspaceDefinition $workspace): Dashboard
+    {
+        return new Dashboard(
+            workspace: $workspace,
+            kpis: $payload['kpis'] ?? [],
+            charts: $payload['charts'] ?? [],
+            tables: $payload['tables'] ?? [],
+            relationships: $payload['relationships'] ?? [],
+            funnels: $payload['funnels'] ?? [],
+            cohorts: $payload['cohorts'] ?? [],
         );
     }
 

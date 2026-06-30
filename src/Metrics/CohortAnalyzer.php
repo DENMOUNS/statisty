@@ -32,11 +32,16 @@ final class CohortAnalyzer
             return $this->analyzeCountsOnly($modelClass, $dateColumn, $period, $periods);
         }
 
-        $firstSeenByIdentity = [];
-        $activityByIdentity = [];
+        $cohortSizes = [];
+        $cohortCounts = [];
+        $cohortStartDates = [];
+        $currentIdentity = null;
+        $currentCohort = null;
+        $currentBuckets = [];
 
         $query = $modelClass::query()
             ->select([$identityColumn, $activityDateColumn])
+            ->orderBy($identityColumn)
             ->orderBy($activityDateColumn);
 
         foreach ($query->cursor() as $item) {
@@ -45,52 +50,51 @@ final class CohortAnalyzer
                 continue;
             }
 
+            $identity = (string) $identity;
             $date = Carbon::parse($item->{$activityDateColumn});
-            $key = (string) $identity;
+            $bucket = $this->bucketKey($date, $period);
 
-            if (! isset($firstSeenByIdentity[$key]) || $date->lessThan($firstSeenByIdentity[$key])) {
-                $firstSeenByIdentity[$key] = $date;
+            if ($identity !== $currentIdentity) {
+                $currentIdentity = $identity;
+                $currentBuckets = [];
+                $currentCohort = $bucket;
+                $cohortSizes[$currentCohort] = ($cohortSizes[$currentCohort] ?? 0) + 1;
+
+                if (! isset($cohortStartDates[$currentCohort]) || $date->lessThan($cohortStartDates[$currentCohort])) {
+                    $cohortStartDates[$currentCohort] = $date;
+                }
             }
 
-            $activityByIdentity[$key][$this->bucketKey($date, $period)] = true;
+            if (isset($currentBuckets[$bucket])) {
+                continue;
+            }
+
+            $currentBuckets[$bucket] = true;
+            $cohortCounts[$currentCohort][$bucket] = ($cohortCounts[$currentCohort][$bucket] ?? 0) + 1;
         }
 
-        if ($firstSeenByIdentity === []) {
+        if ($cohortSizes === []) {
             return ['labels' => [], 'matrix' => [], 'sizes' => []];
         }
 
-        $cohorts = [];
-        foreach ($firstSeenByIdentity as $identity => $firstSeen) {
-            $cohorts[$this->bucketKey($firstSeen, $period)][] = $identity;
-        }
+        ksort($cohortSizes);
 
-        ksort($cohorts);
-
-        $labels = array_keys($cohorts);
+        $labels = array_keys($cohortSizes);
         $matrix = [];
+        /** @var array<string, int> $sizes */
         $sizes = [];
 
         foreach ($labels as $label) {
-            $members = $cohorts[$label];
-            $sizes[$label] = count($members);
-            $start = $this->periodStart($firstSeenByIdentity[$members[0]], $period);
+            $sizes[$label] = $cohortSizes[$label];
+            $start = $this->periodStart($cohortStartDates[$label], $period);
 
             $rowCounts = [];
             for ($p = 0; $p < max(1, $periods); $p++) {
                 $bucket = $this->bucketKey($this->periodStart($start, $period, $p), $period);
-                $count = 0;
-
-                foreach ($members as $identity) {
-                    if (isset($activityByIdentity[$identity][$bucket])) {
-                        $count++;
-                    }
-                }
-
-                $rowCounts[] = $count;
+                $rowCounts[] = $cohortCounts[$label][$bucket] ?? 0;
             }
 
             if ($zeroFill) {
-                // ensure row has exactly $periods entries
                 while (count($rowCounts) < $periods) {
                     $rowCounts[] = 0;
                 }
@@ -98,7 +102,7 @@ final class CohortAnalyzer
 
             if ($includeRetention) {
                 $rowCounts = array_map(function ($c, $idx) use ($sizes, $label) {
-                    $size = $sizes[$label] ?? 0;
+                    $size = array_key_exists($label, $sizes) ? $sizes[$label] : 0;
                     $pct = $size > 0 ? ($c / $size) * 100 : 0.0;
                     return ['count' => $c, 'retention' => $pct, 'period' => $idx];
                 }, $rowCounts, array_keys($rowCounts));
@@ -167,7 +171,7 @@ final class CohortAnalyzer
     {
         return match ($period) {
             'month' => $date->format('Y-m'),
-            'week' => $date->format('o-\W') . ' W' . $date->weekOfYear,
+            'week' => $date->copy()->startOfWeek()->format('Y-m-d'),
             default => $date->format('Y-m-d'),
         };
     }

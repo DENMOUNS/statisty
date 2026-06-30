@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 
 final class Exporter
 {
-
     private const DEFAULT_MAX_ROWS = 100_000;
 
     public static function streamCsv(

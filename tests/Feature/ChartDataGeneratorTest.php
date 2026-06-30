@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Statisty\Charts\ChartDataGenerator;
+use Statisty\Tests\Models\Event;
 use Statisty\Tests\TestCase;
 
 class ChartDataGeneratorTest extends TestCase
@@ -66,20 +67,17 @@ class ChartDataGeneratorTest extends TestCase
         (new ChartDataGenerator())->generateFromModel(get_class($model), 'value) from events --', 'created_at');
     }
 
-    public function test_sqlite_uses_native_grouping_for_period_count()
+    public function test_sqlite_count_by_period_returns_expected_buckets()
     {
-        $model = new class extends Model {
-            protected $table = 'events';
-            public $timestamps = false;
-        };
-
         $generator = new ChartDataGenerator();
-        $query = $model->newQuery();
+        $query = Event::query();
 
         $method = new \ReflectionMethod(ChartDataGenerator::class, 'aggregateCountByPeriod');
         $method->setAccessible(true);
-        $method->invoke($generator, $query, 'events.created_at', 'day');
+        $result = $method->invoke($generator, $query, 'events.created_at', 'day');
 
-        $this->assertStringContainsString('strftime', $query->toSql());
+        $this->assertIsArray($result);
+        $this->assertCount(3, $result);
+        $this->assertEquals([1, 1, 1], array_values($result));
     }
 }

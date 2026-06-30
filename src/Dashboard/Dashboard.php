@@ -39,11 +39,12 @@ final class Dashboard
 
     private function mapDefinitions(array $definitions): array
     {
-        return array_map(
-            fn (mixed $definition): mixed => method_exists($definition, 'toArray')
-                ? $definition->toArray()
-                : $definition,
-            $definitions,
-        );
+        return array_map(function (mixed $definition): mixed {
+            if (is_object($definition) && method_exists($definition, 'toArray')) {
+                return $definition->toArray();
+            }
+
+            return $definition;
+        }, $definitions);
     }
 }

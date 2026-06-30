@@ -12,7 +12,8 @@ final class StatistyManager
     public function __construct(
         private readonly array $config = [],
         private readonly ?DashboardBuilder $dashboardBuilder = null,
-    ) {}
+    ) {
+    }
 
     public function workspace(?string $name = null): WorkspaceBuilder
     {

@@ -191,9 +191,8 @@ final class FunnelCalculator
 
         $prevMap = $previousCompletions;
         $window = $windowSeconds;
-        $strictFlag = $strict;
 
-        $query->chunk(1000, function ($items) use (&$result, &$prevMap, $distinctBy, $dateColumn, $segmentBy, $window, $strictFlag, &$segments) {
+        $query->chunk(1000, function ($items) use (&$result, &$prevMap, $distinctBy, $dateColumn, $segmentBy, $window, &$segments) {
             foreach ($items as $row) {
                 $identity = (string) $row->{$distinctBy};
                 if (! isset($prevMap[$identity]) || isset($result[$identity])) {
@@ -203,14 +202,8 @@ final class FunnelCalculator
                 $dt = Carbon::parse($row->{$dateColumn});
                 $after = $prevMap[$identity];
 
-                if ($strictFlag) {
-                    if (! $dt->gt($after)) {
-                        continue;
-                    }
-                } else {
-                    if ($dt->lt($after)) {
-                        continue;
-                    }
+                if (! $dt->gt($after)) {
+                    continue;
                 }
 
                 if ($window > 0) {

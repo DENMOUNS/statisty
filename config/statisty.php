@@ -35,6 +35,8 @@ return [
         'version' => env('STATISTY_CACHE_VERSION', 'v1'),
     ],
 
+    'disable_columns_cache' => env('STATISTY_DISABLE_COLUMNS_CACHE', false),
+
     'features' => [
         'kpis' => true,
         'charts' => true,

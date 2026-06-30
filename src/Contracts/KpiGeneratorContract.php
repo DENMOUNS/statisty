@@ -8,5 +8,8 @@ use Statisty\Workspace\WorkspaceDefinition;
 
 interface KpiGeneratorContract
 {
+    /**
+     * @return array<int, array<string, mixed>|\Statisty\Metrics\KpiDefinition>
+     */
     public function generate(WorkspaceDefinition $workspace): array;
 }

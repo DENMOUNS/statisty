@@ -266,7 +266,8 @@ final class WorkspaceBuilder
                 throw new InvalidWorkspaceConfiguration("Workspace model [{$model}] does not exist.");
             }
 
-            if (class_exists('Illuminate\\Database\\Eloquent\\Model')
+            if (
+                class_exists('Illuminate\\Database\\Eloquent\\Model')
                 && ! is_subclass_of($model, 'Illuminate\\Database\\Eloquent\\Model')
             ) {
                 throw new InvalidWorkspaceConfiguration("Workspace model [{$model}] must extend Eloquent Model.");

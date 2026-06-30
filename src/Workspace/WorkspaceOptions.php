@@ -37,7 +37,7 @@ final class WorkspaceOptions
     public function withFilter(string $key, mixed $value): self
     {
         return $this->merge([
-            'filters' => array_replace($this->filters, [$key => $value]),
+            'filters' => array_merge($this->filters, [$key => $value]),
         ]);
     }
 

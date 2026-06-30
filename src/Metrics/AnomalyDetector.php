@@ -20,7 +20,9 @@ final class AnomalyDetector
 
         $mean = array_sum($clean) / $n;
         $sumSq = 0.0;
-        foreach ($clean as $v) { $sumSq += ($v - $mean) * ($v - $mean); }
+        foreach ($clean as $v) {
+            $sumSq += ($v - $mean) * ($v - $mean);
+        }
         $std = $n > 1 ? sqrt($sumSq / ($n - 1)) : 0.0;
 
         // IQR based detection
@@ -39,8 +41,25 @@ final class AnomalyDetector
             $isZ = $z >= $threshold;
             $isRatio = $mean > 0 ? ($val / $mean) >= 4.0 : false;
 
-            if ($isIqrOutlier || $isZ || $isRatio) {
-                $out[] = ['index' => $i, 'label' => $labels[$i] ?? (string)$i, 'value' => $val, 'z' => $z];
+            $methods = [];
+            if ($isIqrOutlier) {
+                $methods[] = 'iqr';
+            }
+            if ($isZ) {
+                $methods[] = 'zscore';
+            }
+            if ($isRatio) {
+                $methods[] = 'ratio';
+            }
+
+            if ($methods !== []) {
+                $out[] = [
+                    'index' => $i,
+                    'label' => $labels[$i] ?? (string) $i,
+                    'value' => $val,
+                    'z' => $z,
+                    'methods' => $methods,
+                ];
             }
         }
 
@@ -50,11 +69,15 @@ final class AnomalyDetector
     private function quantile(array $sorted, float $q): float
     {
         $n = count($sorted);
-        if ($n === 0) { return 0.0; }
+        if ($n === 0) {
+            return 0.0;
+        }
         $pos = ($n - 1) * $q;
         $lower = (int) floor($pos);
         $upper = (int) ceil($pos);
-        if ($lower == $upper) { return $sorted[$lower]; }
+        if ($lower == $upper) {
+            return $sorted[$lower];
+        }
         $weight = $pos - $lower;
         return $sorted[$lower] * (1 - $weight) + $sorted[$upper] * $weight;
     }

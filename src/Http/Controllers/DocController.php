@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionNamedType;
 use Throwable;
 
 final class DocController extends BaseDashboardController
@@ -76,22 +77,20 @@ final class DocController extends BaseDashboardController
                         // Inspect method parameters to check for FormRequests, DTOs, or other injectables
                         foreach ($refMethod->getParameters() as $param) {
                             $type = $param->getType();
-                            if ($type !== null && !$type->isBuiltin()) {
+                            if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
                                 $className = $type->getName();
-                                
+
                                 // 1. Form Requests
                                 if (is_subclass_of($className, \Illuminate\Foundation\Http\FormRequest::class)) {
                                     $rules = $this->extractFormRequestRules($className);
                                     if ($rules !== []) {
                                         $routeInfo['validation_rules'] = array_merge($routeInfo['validation_rules'], $rules);
                                     }
-                                } 
-                                // 2. Ignore Laravel core classes/services
-                                elseif (str_starts_with($className, 'Illuminate\\') || str_starts_with($className, 'Symfony\\')) {
+                                } elseif (str_starts_with($className, 'Illuminate\\') || str_starts_with($className, 'Symfony\\')) {
+                                    // 2. Ignore Laravel core classes/services
                                     continue;
-                                }
-                                // 3. Try to extract public properties from potential DTOs
-                                elseif (class_exists($className)) {
+                                } elseif (class_exists($className)) {
+                                    // 3. Try to extract public properties from potential DTOs
                                     $dtoProps = $this->extractDtoProperties($className);
                                     if ($dtoProps !== []) {
                                         $routeInfo['validation_rules'] = array_merge($routeInfo['validation_rules'], $dtoProps);
@@ -199,14 +198,14 @@ final class DocController extends BaseDashboardController
                 $content = trim(preg_replace('/^@(body|query)Param\s+/', '', $line));
                 // Split by spaces: [name] [type] [required/optional] [description...]
                 $parts = preg_split('/\s+/', $content, 4);
-                
+
                 if (count($parts) >= 1) {
                     $fieldName = $parts[0];
                     $fieldType = $parts[1] ?? 'string';
                     $reqStr = strtolower($parts[2] ?? '');
                     $isRequired = ($reqStr === 'required');
                     $desc = $parts[3] ?? '';
-                    
+
                     if ($reqStr !== 'required' && $reqStr !== 'optional') {
                         // If the 3rd arg isn't required/optional, it's probably part of the description
                         $desc = trim(($parts[2] ?? '') . ' ' . $desc);
@@ -297,19 +296,23 @@ final class DocController extends BaseDashboardController
 
     private function extractDtoProperties(string $className): array
     {
+        if ($this->isFrameworkRequestClass($className)) {
+            return [];
+        }
+
         $propertiesList = [];
         try {
             $refClass = new ReflectionClass($className);
             // Only extract public properties as they are typically what is exposed/expected for binding
             $properties = $refClass->getProperties(\ReflectionProperty::IS_PUBLIC);
-            
+
             foreach ($properties as $property) {
                 $type = $property->getType();
                 $typeStr = $type ? (method_exists($type, 'getName') ? $type->getName() : (string) $type) : 'mixed';
-                
+
                 // If it's strongly typed and doesn't allow null, it's required
                 $isRequired = $type && !$type->allowsNull();
-                
+
                 $propertiesList[] = [
                     'field' => $property->getName(),
                     'rules' => "Type: {$typeStr} (DTO Property)",
@@ -321,5 +324,12 @@ final class DocController extends BaseDashboardController
         }
 
         return $propertiesList;
+    }
+
+    private function isFrameworkRequestClass(string $className): bool
+    {
+        return str_starts_with($className, 'Illuminate\\')
+            || str_starts_with($className, 'Symfony\\')
+            || str_starts_with($className, 'Psr\\');
     }
 }

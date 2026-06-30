@@ -7,12 +7,12 @@ namespace Statisty\Discovery;
 use Statisty\Contracts\RelationshipDiscoveryContract;
 use Statisty\Workspace\WorkspaceDefinition;
 
-
 final class EloquentRelationshipDiscovery implements RelationshipDiscoveryContract
 {
     public function __construct(
         private readonly RelationshipProfile $profiler = new RelationshipProfile(),
-    ) {}
+    ) {
+    }
 
     public function discover(WorkspaceDefinition $workspace): array
     {

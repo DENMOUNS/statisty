@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Statisty\Charts;
 
+use Illuminate\Database\Connection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -227,7 +228,7 @@ final class ChartDataGenerator
             return $this->aggregateSumByPeriod($query, $dateColumnPrefixed, $valueFieldToAggregate, $period);
         }
 
-        return $this->collectRawRows($query, $dateColumn, $valueField, $isRelation, $relationField);
+        return $this->collectCategoryCounts($query, $dateColumn, $valueField, $isRelation, $relationField);
     }
 
     private function shouldUseRawRows(array $options): bool
@@ -241,9 +242,16 @@ final class ChartDataGenerator
             return false;
         }
 
+        if ($this->isColumnNumeric($query, $valueFieldToAggregate)) {
+            return true;
+        }
+
         try {
             $sampleQuery = clone $query;
-            $sample = $sampleQuery->limit(50)->pluck($valueFieldToAggregate)->filter()->values();
+            $sample = $sampleQuery->whereNotNull($valueFieldToAggregate)->limit(50)
+                ->pluck($valueFieldToAggregate)
+                ->filter()
+                ->values();
 
             return $sample->filter(fn ($v) => is_numeric($v))->count() > 0;
         } catch (\Throwable) {
@@ -269,6 +277,65 @@ final class ChartDataGenerator
         return $rows;
     }
 
+    private function collectCategoryCounts(EloquentBuilder $query, string $dateColumn, string $valueField, bool $isRelation, ?string $relationField): array
+    {
+        $valueKey = $isRelation ? $relationField : $valueField;
+        $counts = [];
+
+        $query->chunk(1000, function ($items) use (&$counts, $valueKey): void {
+            foreach ($items as $item) {
+                $value = $item->{$valueKey};
+                if ($value === null || $value === '') {
+                    continue;
+                }
+
+                $value = (string) $value;
+                $counts[$value] = ($counts[$value] ?? 0) + 1;
+            }
+        });
+
+        arsort($counts);
+
+        return $counts;
+    }
+
+    private function isColumnNumeric(EloquentBuilder $query, string $valueField): bool
+    {
+        [$table, $column] = $this->parseQualifiedField($query, $valueField);
+
+        try {
+            $connection = $query->getConnection();
+            if (! $connection instanceof Connection) {
+                return false;
+            }
+
+            $schema = $connection->getSchemaBuilder();
+
+            if (method_exists($schema, 'getColumnType')) {
+                $type = $schema->getColumnType($table, $column);
+                return in_array($type, ['integer', 'bigint', 'smallint', 'decimal', 'float', 'double', 'real', 'numeric'], true);
+            }
+
+            if (method_exists($connection, 'getDoctrineColumn')) {
+                $doctrineType = $connection->getDoctrineColumn($table, $column)->getType()->getName();
+                return in_array($doctrineType, ['integer', 'smallint', 'bigint', 'decimal', 'float', 'double', 'real', 'numeric'], true);
+            }
+        } catch (\Throwable) {
+            // Fallback to sample-based detection.
+        }
+
+        return false;
+    }
+
+    private function parseQualifiedField(EloquentBuilder $query, string $qualifiedField): array
+    {
+        if (str_contains($qualifiedField, '.')) {
+            return explode('.', $qualifiedField, 2);
+        }
+
+        return [$query->getModel()->getTable(), $qualifiedField];
+    }
+
     private function visualOptions(array $options): array
     {
         $meta = [];
@@ -291,34 +358,50 @@ final class ChartDataGenerator
      */
     private function aggregateCountByPeriod(EloquentBuilder $query, string $dateColumn, string $period): array
     {
-        $driver = $query->getConnection()->getDriverName();
+        $connection = $query->getConnection();
+        if (! $connection instanceof Connection) {
+            return $this->aggregateCountByPeriodInPhp($query, $dateColumn, $period);
+        }
 
-        if (str_contains($driver, 'mysql') || str_contains($driver, 'pdo_mysql')) {
-            $format = match ($period) {
-                'month' => '%Y-%m',
-                'week' => '%x-W%v',
-                'year' => '%Y',
-                default => '%Y-%m-%d',
-            };
+        $driver = $connection->getDriverName();
 
-            $wrappedDateColumn = $query->getQuery()->getGrammar()->wrap($dateColumn);
-            $rows = $query->selectRaw("DATE_FORMAT({$wrappedDateColumn}, '{$format}') as bucket, COUNT(*) as cnt")->groupBy('bucket')->orderBy('bucket')->get();
+        if ($driver === 'mysql') {
+            if ($period === 'week') {
+                $wrappedDateColumn = $query->getQuery()->getGrammar()->wrap($dateColumn);
+                $bucketExpression = "DATE_SUB(DATE({$wrappedDateColumn}), INTERVAL WEEKDAY({$wrappedDateColumn}) DAY)";
+            } else {
+                $format = match ($period) {
+                    'month' => '%Y-%m',
+                    'year' => '%Y',
+                    default => '%Y-%m-%d',
+                };
+
+                $wrappedDateColumn = $query->getQuery()->getGrammar()->wrap($dateColumn);
+                $bucketExpression = "DATE_FORMAT({$wrappedDateColumn}, '{$format}')";
+            }
+
+            $rows = $query->selectRaw("{$bucketExpression} as bucket, COUNT(*) as cnt")->groupBy('bucket')->orderBy('bucket')->get();
 
             return $rows->pluck('cnt', 'bucket')->map(fn ($v) => (int) $v)->all();
         }
 
-        if (str_contains($driver, 'sqlite')) {
-            $format = match ($period) {
-                'month' => '%Y-%m',
-                'week' => '%Y-W%W',
-                'year' => '%Y',
-                default => '%Y-%m-%d',
-            };
-
+        if ($driver === 'sqlite') {
             $grammar = $query->getQuery()->getGrammar();
             $wrappedDateColumn = $grammar->wrap($dateColumn);
-            $rows = $query->selectRaw("strftime('{$format}', {$wrappedDateColumn}) as bucket, COUNT(*) as cnt")
-                ->groupByRaw("strftime('{$format}', {$wrappedDateColumn})")
+
+            if ($period === 'week') {
+                $bucketExpression = "date({$wrappedDateColumn}, '-' || ((strftime('%w', {$wrappedDateColumn}) + 6) % 7) || ' days')";
+            } else {
+                $format = match ($period) {
+                    'month' => '%Y-%m',
+                    'year' => '%Y',
+                    default => '%Y-%m-%d',
+                };
+                $bucketExpression = "strftime('{$format}', {$wrappedDateColumn})";
+            }
+
+            $rows = $query->selectRaw("{$bucketExpression} as bucket, COUNT(*) as cnt")
+                ->groupByRaw($bucketExpression)
                 ->orderBy('bucket')
                 ->get();
 
@@ -334,37 +417,52 @@ final class ChartDataGenerator
      */
     private function aggregateSumByPeriod(EloquentBuilder $query, string $dateColumn, string $valueField, string $period): array
     {
-        $driver = $query->getConnection()->getDriverName();
+        $connection = $query->getConnection();
+        if (! $connection instanceof Connection) {
+            return $this->aggregateSumByPeriodInPhp($query, $dateColumn, $valueField, $period);
+        }
 
-        if (str_contains($driver, 'mysql') || str_contains($driver, 'pdo_mysql')) {
-            $format = match ($period) {
-                'month' => '%Y-%m',
-                'week' => '%x-W%v',
-                'year' => '%Y',
-                default => '%Y-%m-%d',
-            };
+        $driver = $connection->getDriverName();
 
+        if ($driver === 'mysql') {
             $grammar = $query->getQuery()->getGrammar();
             $wrappedDateColumn = $grammar->wrap($dateColumn);
             $wrappedValueField = $grammar->wrap($valueField);
-            $rows = $query->selectRaw("DATE_FORMAT({$wrappedDateColumn}, '{$format}') as bucket, SUM({$wrappedValueField}) as s")->groupBy('bucket')->orderBy('bucket')->get();
+
+            if ($period === 'week') {
+                $bucketExpression = "DATE_SUB(DATE({$wrappedDateColumn}), INTERVAL WEEKDAY({$wrappedDateColumn}) DAY)";
+            } else {
+                $format = match ($period) {
+                    'month' => '%Y-%m',
+                    'year' => '%Y',
+                    default => '%Y-%m-%d',
+                };
+                $bucketExpression = "DATE_FORMAT({$wrappedDateColumn}, '{$format}')";
+            }
+
+            $rows = $query->selectRaw("{$bucketExpression} as bucket, SUM({$wrappedValueField}) as s")->groupBy('bucket')->orderBy('bucket')->get();
 
             return $rows->pluck('s', 'bucket')->map(fn ($v) => (float) $v)->all();
         }
 
-        if (str_contains($driver, 'sqlite')) {
-            $format = match ($period) {
-                'month' => '%Y-%m',
-                'week' => '%Y-W%W',
-                'year' => '%Y',
-                default => '%Y-%m-%d',
-            };
-
+        if ($driver === 'sqlite') {
             $grammar = $query->getQuery()->getGrammar();
             $wrappedDateColumn = $grammar->wrap($dateColumn);
             $wrappedValueField = $grammar->wrap($valueField);
-            $rows = $query->selectRaw("strftime('{$format}', {$wrappedDateColumn}) as bucket, SUM({$wrappedValueField}) as s")
-                ->groupByRaw("strftime('{$format}', {$wrappedDateColumn})")
+
+            if ($period === 'week') {
+                $bucketExpression = "date({$wrappedDateColumn}, '-' || ((strftime('%w', {$wrappedDateColumn}) + 6) % 7) || ' days')";
+            } else {
+                $format = match ($period) {
+                    'month' => '%Y-%m',
+                    'year' => '%Y',
+                    default => '%Y-%m-%d',
+                };
+                $bucketExpression = "strftime('{$format}', {$wrappedDateColumn})";
+            }
+
+            $rows = $query->selectRaw("{$bucketExpression} as bucket, SUM({$wrappedValueField}) as s")
+                ->groupByRaw($bucketExpression)
                 ->orderBy('bucket')
                 ->get();
 
@@ -456,7 +554,7 @@ final class ChartDataGenerator
     private function bucketKey(Carbon $date, string $period): string
     {
         return match ($period) {
-            'week' => $date->format('o') . ' W' . $date->weekOfYear,
+            'week' => $date->copy()->startOfWeek()->format('Y-m-d'),
             'month' => $date->format('Y-m'),
             'year' => $date->format('Y'),
             default => $date->format('Y-m-d'),
@@ -560,8 +658,12 @@ final class ChartDataGenerator
 
         foreach ($values as $v) {
             $idx = (int) floor(($v - $min) / $width);
-            if ($idx >= $bins) { $idx = $bins - 1; }
-            if ($idx < 0) { $idx = 0; }
+            if ($idx >= $bins) {
+                $idx = $bins - 1;
+            }
+            if ($idx < 0) {
+                $idx = 0;
+            }
             $buckets[$idx]++;
         }
 

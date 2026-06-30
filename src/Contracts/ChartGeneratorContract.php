@@ -8,5 +8,8 @@ use Statisty\Workspace\WorkspaceDefinition;
 
 interface ChartGeneratorContract
 {
+    /**
+     * @return array<int, array<string, mixed>|\Statisty\Graph\ChartDefinition>
+     */
     public function generate(WorkspaceDefinition $workspace): array;
 }

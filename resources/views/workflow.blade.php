@@ -289,11 +289,12 @@ document.addEventListener('DOMContentLoaded', function () {
     var PALETTE = ['#ff2d20','#f97316','#f59e0b','#10b981','#6366f1','#8b5cf6','#ec4899'];
 
     function buildUrl() {
-        var url = CHART_URL + '?period=' + period;
-        if (dateFrom) url += '&date_from=' + dateFrom;
-        if (dateTo)   url += '&date_to='   + dateTo;
-        if (metric)   url += '&value='     + metric;
-        return url;
+        var params = new URLSearchParams({ period: period });
+        if (dateFrom) params.set('date_from', dateFrom);
+        if (dateTo)   params.set('date_to', dateTo);
+        if (metric)   params.set('value', metric);
+
+        return CHART_URL + '?' + params.toString();
     }
 
     var BASE = {

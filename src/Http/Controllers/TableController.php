@@ -40,13 +40,17 @@ final class TableController extends Controller
 
             $qb->selectVisible($requestedColumns);
 
-            $perPage = min((int) config('statisty.pagination.max', 1000), (int) $request->query('per_page', 50));
+            $perPage = min((int) config('statisty.pagination.max', 1000), (int) $request->query('per_page', '50'));
             $sort = $request->query('sort');
             $dir = $request->query('dir', 'asc');
             $search = $request->query('q');
 
-            if ($sort) { $qb->applySorting($sort, $dir); }
-            if ($search) { $qb->applySearch($requestedColumns ?? [], $search); }
+            if ($sort) {
+                $qb->applySorting($sort, $dir);
+            }
+            if ($search) {
+                $qb->applySearch($requestedColumns ?? [], $search);
+            }
             $filters = $request->query('filters', []);
             $qb->applyFilters($filters);
 

@@ -18,7 +18,7 @@ final class ChartController extends Controller
     {
         try {
             // main logic
-        
+
             $definitionName = $request->query('definition');
             $definition = is_string($definitionName) ? BusinessDefinitionRepository::get('charts', $definitionName) : null;
             if ($definition !== null) {

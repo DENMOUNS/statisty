@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: [8.1, 8.2, 8.3]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v3
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Validate composer
+        run: composer validate --no-check-publish || true
+
+      - name: Install dependencies
+        run: composer install --no-progress --no-interaction --prefer-dist
+
+      - name: PHP syntax check
+        run: |
+          set -e
+          find src tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --colors=never --coverage-text
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse
+
+      - name: Run PHPCS
+        run: vendor/bin/phpcs --standard=phpcs.xml.dist src tests
+
+      - name: Report
+        run: echo "PHP ${matrix.php} finished"

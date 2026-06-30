@@ -13,7 +13,6 @@ final class HttpEndpointsTest extends TestCase
     {
         $resp = $this->get('/api/statisty/health');
         $resp->assertStatus(200)->assertJson(['status' => 'ok']);
-
         $resp2 = $this->get('/web/statisty/dashboard');
         $resp2->assertStatus(200)
             ->assertHeader('content-type', 'text/html; charset=UTF-8')
@@ -28,9 +27,7 @@ final class HttpEndpointsTest extends TestCase
                 'columns' => ['id', 'name', 'status', 'created_at'],
             ],
         ]]);
-
         Item::create(['name' => 'Dashboard row', 'status' => 'active']);
-
         $this->get('/web/statisty/dashboard')
             ->assertStatus(200)
             ->assertSee('Item')
@@ -45,10 +42,8 @@ final class HttpEndpointsTest extends TestCase
                 'columns' => ['id', 'name', 'status', 'created_at'],
             ],
         ]]);
-
         Item::create(['name' => 'Workflow row details', 'status' => 'completed']);
-
-        // Test detailed workflow view
+// Test detailed workflow view
         $escapedClass = str_replace('\\', '%5C', Item::class);
         $this->get('/web/statisty/workflow/' . $escapedClass)
             ->assertStatus(200)
@@ -67,13 +62,11 @@ final class HttpEndpointsTest extends TestCase
             ->assertSee('Project Health')
             ->assertSee('Laravel')
             ->assertSee('Environment');
-
-        // 2. Test logs view
+// 2. Test logs view
         $this->get('/web/statisty/logs')
             ->assertStatus(200)
             ->assertSee('Log Viewer');
-
-        // 3. Test jobs view
+// 3. Test jobs view
         $this->get('/web/statisty/jobs')
             ->assertStatus(200)
             ->assertSee('Queue')

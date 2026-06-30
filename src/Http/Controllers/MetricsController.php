@@ -97,7 +97,7 @@ final class MetricsController extends Controller
 
                 if ($type === 'cohort') {
                     $period = $definitionOptions['period'] ?? $request->query('period', 'week');
-                    $periods = (int) ($definitionOptions['periods'] ?? $request->query('periods', 4));
+                    $periods = (int) ($definitionOptions['periods'] ?? $request->query('periods', '4'));
 
                     $ca = new CohortAnalyzer();
                     $res = $ca->analyze($model, $request->query('date_column', 'created_at'), $period, $periods, [
@@ -110,7 +110,7 @@ final class MetricsController extends Controller
                 if ($type === 'anomaly') {
                     $field = $request->query('field', null);
                     $period = $request->query('period', 'day');
-                    $threshold = (float) $request->query('threshold', 3.0);
+                    $threshold = (float) $request->query('threshold', '3.0');
 
                     $g = new ChartDataGenerator();
                     $series = $g->generateFromModel($model, $field, $request->query('date_column', 'created_at'), ['period' => $period]);
@@ -140,7 +140,7 @@ final class MetricsController extends Controller
                     type: $type,
                     field: $field,
                 );
-                
+
                 // caching when enabled in workspace options and ProfilingCache available
                 $ttl = $workspace->options->cacheTtl;
                 $cacheKeyModel = $model . ':' . md5(serialize([$type, $field, $options]));

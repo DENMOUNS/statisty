@@ -13,7 +13,8 @@ final class AutomaticChartGenerator implements ChartGeneratorContract
 {
     public function __construct(
         private readonly ChartDataGenerator $generator = new ChartDataGenerator(),
-    ) {}
+    ) {
+    }
 
     public function generate(WorkspaceDefinition $workspace): array
     {

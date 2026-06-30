@@ -15,31 +15,37 @@ final class HealthController extends BaseDashboardController
     {
         $connection = DB::connection();
         $wasLogging = false;
+        $preHealthQueryCount = null;
 
         try {
             $wasLogging = $connection->logging();
             if (! $wasLogging) {
                 $connection->enableQueryLog();
             }
+
+            $preHealthQueryCount = count($connection->getQueryLog());
         } catch (\Throwable $e) {
         }
 
         $checks = $this->healthChecks();
 
         try {
-            $queriesCount = count($connection->getQueryLog());
-            $checks[] = $this->healthCheck('Report SQL Queries', $queriesCount . ' queries executed', 'ready');
-        } catch (\Throwable $e) {
-        } finally {
+            $queryCount = count($connection->getQueryLog());
+            if ($preHealthQueryCount !== null) {
+                $queryCount = max(0, $queryCount - $preHealthQueryCount);
+            }
+
+            $checks[] = $this->healthCheck('Report SQL Queries', $queryCount . ' queries executed', 'ready');
+        } catch (\Throwable $e) {} finally {
             try {
                 if (! $wasLogging) {
                     $connection->flushQueryLog();
+                    $connection->disableQueryLog();
                 }
-            } catch (\Throwable $e) {
-            }
+            } catch (\Throwable $e) {}
         }
 
-        $slowQueries = array_merge($this->currentRequestSlowQueries(), $this->loadPersistedSlowQueries());
+        $slowQueries = array_merge($this->currentRequestSlowQueries($preHealthQueryCount), $this->loadPersistedSlowQueries());
         $slowQueries = $this->sortSlowQueries($slowQueries);
 
         return view('statisty::health', [
@@ -68,7 +74,7 @@ final class HealthController extends BaseDashboardController
         return $this->filterRecentSlowQueries($slowQueries);
     }
 
-    private function currentRequestSlowQueries(): array
+    private function currentRequestSlowQueries(?int $maxIndex = null): array
     {
         $threshold = (float) config('statisty.features.slow_queries.threshold_ms', 100);
         $currentQueries = [];
@@ -76,6 +82,10 @@ final class HealthController extends BaseDashboardController
         try {
             $queryLog = DB::connection()->getQueryLog();
             $connectionName = DB::connection()->getName();
+
+            if ($maxIndex !== null) {
+                $queryLog = array_slice($queryLog, $maxIndex);
+            }
 
             foreach ($queryLog as $entry) {
                 if (! isset($entry['time']) || (float) $entry['time'] < $threshold) {

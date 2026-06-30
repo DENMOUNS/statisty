@@ -17,6 +17,7 @@ class TableQueryBuilderTest extends TestCase
         parent::setUp();
 
         Schema::create('test_models', function (Blueprint $table) {
+
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('name')->nullable();
@@ -24,19 +25,17 @@ class TableQueryBuilderTest extends TestCase
             $table->string('secret')->nullable();
             $table->timestamps();
         });
-
         Schema::create('test_users', function (Blueprint $table) {
+
             $table->id();
             $table->string('email')->nullable();
             $table->string('password')->nullable();
         });
-
         \DB::table('test_users')->insert([
             ['id' => 1, 'email' => 'a@example.test', 'password' => 'hidden'],
             ['id' => 2, 'email' => 'b@example.test', 'password' => 'hidden'],
         ]);
-
-        // insert some rows
+// insert some rows
         \DB::table('test_models')->insert([
             ['user_id' => 1, 'name' => 'a', 'password' => 'x', 'secret' => 's', 'created_at' => now(), 'updated_at' => now()],
             ['user_id' => 2, 'name' => 'b', 'password' => 'y', 'secret' => 't', 'created_at' => now(), 'updated_at' => now()],
@@ -45,11 +44,11 @@ class TableQueryBuilderTest extends TestCase
 
     protected function tearDown(): void
     {
+
         Schema::dropIfExists('test_models');
         Schema::dropIfExists('test_users');
         parent::tearDown();
     }
-
     public function test_select_visible_excludes_sensitive_columns()
     {
         $model = new class extends Model {
@@ -72,12 +71,9 @@ class TableQueryBuilderTest extends TestCase
     public function test_table_endpoint_does_not_expose_hidden_relation_columns()
     {
         $url = '/api/statisty/tables/' . urlencode(StatistyTableEntry::class);
-
         $response = $this->getJson($url . '?columns[]=user.email&columns[]=user.password');
-
         $response->assertStatus(200);
         $row = $response->json('data.0');
-
         $this->assertSame('a@example.test', $row['user.email']);
         $this->assertArrayNotHasKey('user.password', $row);
     }
@@ -93,7 +89,6 @@ class StatistyTableUser extends Model
 class StatistyTableEntry extends Model
 {
     protected $table = 'test_models';
-
     public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(StatistyTableUser::class, 'user_id');
