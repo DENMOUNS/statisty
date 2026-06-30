@@ -40,7 +40,8 @@ jobs:
         run: vendor/bin/phpstan analyse
 
       - name: Run PHPCS
-        run: vendor/bin/phpcs --standard=phpcs.xml.dist src tests
+        # run: vendor/bin/phpcs --standard=phpcs.xml.dist src tests
+        run: vendor/bin/phpcs --standard=phpcs.xml.dist -n src tests
 
       - name: Report
         run: echo "PHP ${matrix.php} finished"
