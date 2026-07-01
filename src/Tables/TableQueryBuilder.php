@@ -6,6 +6,8 @@ namespace Statisty\Tables;
 
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Schema;
 use Statisty\Support\ModelSchema;
 
 final class TableQueryBuilder
@@ -31,30 +33,42 @@ final class TableQueryBuilder
     {
         $model = $this->query->getModel();
 
-        $relationNames = [];
-
+        // Aucune colonne demandée explicitement : on part de la liste
+        // "d'affichage" (sans id, sans clé étrangère brute) plutôt que de
+        // toutes les colonnes visibles.
         if ($columns === null) {
-            $columns = ModelSchema::visibleColumns($model);
-        } else {
-            // detect relation columns like "relation.field" and collect relations to eager load
-            $own = [];
-            foreach ($columns as $c) {
-                if (is_string($c) && str_contains($c, '.')) {
-                    [$rel, $attr] = explode('.', $c, 2);
-                    if (ModelSchema::isVisibleRelationColumn($model, $rel, $attr)) {
-                        $relationNames[] = $rel;
-                        $relation = ModelSchema::relation($model, $rel);
-                        if ($relation instanceof \Illuminate\Database\Eloquent\Relations\BelongsTo) {
-                            $own[] = $relation->getForeignKeyName();
-                        }
-                    }
-                    continue;
-                }
+            $columns = ModelSchema::displayColumns($model);
+        }
 
-                $own[] = $c;
+        $relationNames = [];
+        $own = [];
+
+        foreach ($columns as $c) {
+            if (is_string($c) && str_contains($c, '.')) {
+                [$rel, $attr] = explode('.', $c, 2);
+                if (ModelSchema::isVisibleRelationColumn($model, $rel, $attr)) {
+                    $relationNames[] = $rel;
+                    $relation = ModelSchema::relation($model, $rel);
+                    if ($relation instanceof BelongsTo) {
+                        $own[] = $relation->getForeignKeyName();
+                    }
+                }
+                continue;
             }
 
-            $columns = ModelSchema::visibleColumns($model, $own);
+            $own[] = $c;
+        }
+
+        $columns = ModelSchema::visibleColumns($model, $own);
+
+        // La clé primaire doit toujours être sélectionnée en SQL : elle est
+        // nécessaire à l'hydratation Eloquent et au eager-loading des
+        // relations. Elle sera ensuite systématiquement masquée de la
+        // sortie par TableRowResource, quel que soit le moyen par lequel
+        // elle a été sélectionnée.
+        $primaryKey = $model->getKeyName();
+        if (! in_array($primaryKey, $columns, true)) {
+            $columns[] = $primaryKey;
         }
 
         if (empty($columns)) {
@@ -148,7 +162,25 @@ final class TableQueryBuilder
 
     public function paginate(int $perPage = 50): LengthAwarePaginator
     {
+        if (empty($this->query->getQuery()->orders)) {
+            $this->applyDefaultSort();
+        }
+
         return $this->query->paginate(max(1, $perPage));
+    }
+
+    private function applyDefaultSort(): void
+    {
+        $model = $this->query->getModel();
+        $primaryKey = $model->getKeyName();
+        $table = $model->getTable();
+
+        if (Schema::hasColumn($table, 'created_at')) {
+            $this->query->latest('created_at');
+            return;
+        }
+
+        $this->query->latest($primaryKey);
     }
 
     public function get()

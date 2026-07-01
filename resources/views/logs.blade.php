@@ -47,15 +47,15 @@
                     </div>
                     <div class="statisty-filters-group">
                         <select id="statistyLogLevelFilter" aria-label="Filter by level">
-                            <option value="all">All Levels</option>
-                            <option value="emergency">Emergency</option>
-                            <option value="alert">Alert</option>
-                            <option value="critical">Critical</option>
-                            <option value="error">Error</option>
-                            <option value="warning">Warning</option>
-                            <option value="notice">Notice</option>
-                            <option value="info">Info</option>
-                            <option value="debug">Debug</option>
+                            <option value="all" @if(($activeLevel ?? 'all') === 'all') selected @endif>All Levels</option>
+                            <option value="emergency" @if(($activeLevel ?? '') === 'emergency') selected @endif>Emergency</option>
+                            <option value="alert" @if(($activeLevel ?? '') === 'alert') selected @endif>Alert</option>
+                            <option value="critical" @if(($activeLevel ?? '') === 'critical') selected @endif>Critical</option>
+                            <option value="error" @if(($activeLevel ?? '') === 'error') selected @endif>Error</option>
+                            <option value="warning" @if(($activeLevel ?? '') === 'warning') selected @endif>Warning</option>
+                            <option value="notice" @if(($activeLevel ?? '') === 'notice') selected @endif>Notice</option>
+                            <option value="info" @if(($activeLevel ?? '') === 'info') selected @endif>Info</option>
+                            <option value="debug" @if(($activeLevel ?? '') === 'debug') selected @endif>Debug</option>
                         </select>
                         <button id="statistyLogExpandAll" class="statisty-btn-secondary">Expand All</button>
                     </div>
@@ -65,6 +65,14 @@
                 <div class="statisty-active-log-info">
                     <span class="active-file-label">Active file:</span>
                     <span class="active-file-name">{{ $activeLogFile['name'] ?? 'None' }}</span>
+                    @if(!empty($activeLevel))
+                        <span class="statisty-badge statisty-badge-filter" style="margin-left:8px;">Filtre: {{ ucfirst($activeLevel) }}</span>
+                    @endif
+                    @if(!empty($activePageSize))
+                        <span id="activePageSizeBadge" class="statisty-badge" style="margin-left:8px;">Affichage: {{ $activePageSize }}</span>
+                    @else
+                        <span id="activePageSizeBadge" class="statisty-badge" style="margin-left:8px; display:none;"></span>
+                    @endif
                     <span id="logEntriesCount" class="active-file-label" style="margin-left:12px;"></span>
                 </div>
 
@@ -101,10 +109,10 @@
                     <div style="display:flex;align-items:center;gap:8px;">
                         <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Afficher :</label>
                         <select id="logPageSize" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border-light);background:#fff;color:var(--text-primary);font-size:12px;font-family:var(--font-sans);">
-                            <option value="25" selected>25</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                            <option value="200">200</option>
+                            <option value="25" @if((int)($activePageSize ?? 25) === 25) selected @endif>25</option>
+                            <option value="50" @if((int)($activePageSize ?? 25) === 50) selected @endif>50</option>
+                            <option value="100" @if((int)($activePageSize ?? 25) === 100) selected @endif>100</option>
+                            <option value="200" @if((int)($activePageSize ?? 25) === 200) selected @endif>200</option>
                         </select>
                         <span id="logPaginationInfo" style="font-size:12px;color:var(--text-secondary);"></span>
                     </div>
@@ -123,6 +131,8 @@
         document.addEventListener('DOMContentLoaded', function () {
             const searchInput      = document.getElementById('statistyLogSearch');
             const levelSelect      = document.getElementById('statistyLogLevelFilter');
+            const activeFileName   = @json($activeLogFile['name'] ?? '');
+            const activePageSize   = parseInt(@json($activePageSize ?? 25), 10) || 25;
             const entriesContainer = document.getElementById('statistyLogEntries');
             const scrollWrapper    = entriesContainer ? entriesContainer.closest('.statisty-log-entries-scroll-wrapper') : null;
             const pageSizeEl       = document.getElementById('logPageSize');
@@ -135,7 +145,12 @@
             let allEntries    = entriesContainer ? Array.from(entriesContainer.getElementsByClassName('statisty-log-entry')) : [];
             let visibleEntries = [...allEntries];
             let currentPage   = 1;
-            let pageSize      = 25;
+            let pageSize      = activePageSize;
+
+            // ensure the select reflects the active page size
+            if (pageSizeEl) {
+                pageSizeEl.value = String(pageSize);
+            }
 
             function filterLogs() {
                 const query = searchInput ? searchInput.value.toLowerCase().trim() : '';
@@ -169,13 +184,49 @@
                 if (pageIndicator)  pageIndicator.textContent  = 'Page ' + currentPage + ' / ' + pages;
                 if (paginationInfo) paginationInfo.textContent  = total > 0 ? (start + 1) + '–' + end + ' sur ' + total + ' entrées' : '0 entrée';
                 if (entriesCount)   entriesCount.textContent    = total + ' entrée(s) correspondante(s)';
-                if (prevBtn) prevBtn.disabled = currentPage <= 1;
+                        /* ── File list sidebar ─────────────────────────────────────────────── */
                 if (nextBtn) nextBtn.disabled = currentPage >= pages;
             }
 
             if (searchInput) searchInput.addEventListener('input', filterLogs);
-            if (levelSelect) levelSelect.addEventListener('change', filterLogs);
-            if (pageSizeEl)  pageSizeEl.addEventListener('change', function() { pageSize = parseInt(this.value); currentPage = 1; renderPage(); });
+            if (levelSelect) levelSelect.addEventListener('change', function () {
+                // submit to server to apply server-side level filtering
+                var lvl = this.value;
+                var params = new URLSearchParams(window.location.search);
+                if (lvl === 'all') {
+                    params.delete('level');
+                } else {
+                    params.set('level', lvl);
+                }
+                if (activeFileName) {
+                    params.set('file', activeFileName);
+                }
+                var newSearch = params.toString();
+                window.location.search = newSearch ? ('?' + newSearch) : '';
+            });
+            if (pageSizeEl)  pageSizeEl.addEventListener('change', function() {
+                pageSize = parseInt(this.value, 10) || 25;
+                currentPage = 1;
+                renderPage();
+
+                // persist page_size in the URL without reloading
+                var params = new URLSearchParams(window.location.search);
+                if (pageSize === 25) {
+                    params.delete('page_size');
+                } else {
+                    params.set('page_size', String(pageSize));
+                }
+                if (activeFileName) params.set('file', activeFileName);
+                var newUrl = window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+                history.replaceState(null, '', newUrl);
+
+                // update badge
+                var badge = document.getElementById('activePageSizeBadge');
+                if (badge) {
+                    badge.textContent = 'Affichage: ' + pageSize;
+                    badge.style.display = '';
+                }
+            });
             if (prevBtn)     prevBtn.addEventListener('click', function() { if (currentPage > 1) { currentPage--; renderPage(); } });
             if (nextBtn)     nextBtn.addEventListener('click', function() { currentPage++; renderPage(); });
 
@@ -254,6 +305,22 @@
             flex-shrink: 0;
         }
         .lf-count { font-weight: 400; opacity: .7; }
+
+        /* Badge for active filter */
+        .statisty-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            background: rgba(0,0,0,0.04);
+        }
+        .statisty-badge-filter {
+            background: rgba(59,130,246,0.08);
+            color: var(--color-primary);
+            border: 1px solid rgba(59,130,246,0.12);
+        }
 
         /* Scrollable file list */
         .statisty-log-files-list {

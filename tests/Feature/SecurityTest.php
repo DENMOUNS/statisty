@@ -25,7 +25,8 @@ final class SecurityTest extends TestCase
         $this->assertArrayHasKey('data', $data);
         $row = $data['data'][0];
 
-        $this->assertArrayHasKey('id', $row);
+        // La clé primaire n'est jamais affichée, même demandée explicitement.
+        $this->assertArrayNotHasKey('id', $row);
         $this->assertArrayHasKey('name', $row);
         $this->assertArrayNotHasKey('secret', $row);
     }

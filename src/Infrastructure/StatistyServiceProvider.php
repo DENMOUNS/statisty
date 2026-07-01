@@ -26,6 +26,8 @@ use Statisty\Discovery\RelationshipProfile;
 use Illuminate\Http\Request;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\RateLimiter;
+use Statisty\Http\Middleware\CompressResponse;
+use Statisty\Http\Middleware\EnsureStatistyAuthorized;
 
 final class StatistyServiceProvider extends ServiceProvider
 {
@@ -88,7 +90,8 @@ final class StatistyServiceProvider extends ServiceProvider
         if (class_exists('\Illuminate\Routing\Router')) {
             try {
                 $router = $this->app->make(\Illuminate\Routing\Router::class);
-                $router->aliasMiddleware('statisty.auth', \Statisty\Http\Middleware\EnsureStatistyAuthorized::class);
+                $router->aliasMiddleware('statisty.auth', EnsureStatistyAuthorized::class);
+                $router->aliasMiddleware('statisty.compress', CompressResponse::class);
             } catch (\Throwable) {
             }
         }
@@ -213,9 +216,9 @@ final class StatistyServiceProvider extends ServiceProvider
 
     private function appendSlowQuery(array $entry): void
     {
-        $filePath    = storage_path('logs/statisty_slow_queries.json');
-        $lockPath    = $filePath . '.lock';
-        $maxEntries  = 100;
+        $filePath   = storage_path('logs/statisty_slow_queries.ndjson');
+        $lockPath   = $filePath . '.lock';
+        $maxEntries = 100;
 
         $lockHandle = @fopen($lockPath, 'c');
         if ($lockHandle === false) {
@@ -227,36 +230,54 @@ final class StatistyServiceProvider extends ServiceProvider
                 return;
             }
 
-            $slowQueries = [];
-            if (file_exists($filePath)) {
-                $content = @file_get_contents($filePath);
-                if ($content !== false && $content !== '') {
-                    $decoded = json_decode($content, true);
-                    if (is_array($decoded)) {
-                        $slowQueries = $decoded;
-                    }
+            $line = json_encode($entry, JSON_UNESCAPED_UNICODE);
+            if ($line === false) {
+                return;
+            }
+
+            $handle = @fopen($filePath, 'a');
+            if ($handle === false) {
+                return;
+            }
+
+            fwrite($handle, $line . "\n");
+            fclose($handle);
+
+            try {
+                if (random_int(1, 20) === 1) {
+                    $this->trimSlowQueryLog($filePath, $maxEntries);
                 }
+            } catch (\Throwable) {
+                // random_int peut théoriquement échouer ; pas critique, on ignore.
             }
-
-            $slowQueries[] = $entry;
-            if (count($slowQueries) > $maxEntries) {
-                $slowQueries = array_slice($slowQueries, -$maxEntries);
-            }
-
-            $tmpPath = $filePath . '.tmp.' . getmypid();
-            $written = @file_put_contents(
-                $tmpPath,
-                json_encode($slowQueries, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
-            );
-
-            if ($written !== false) {
-                @rename($tmpPath, $filePath);
-            } else {
-                @unlink($tmpPath);
-            }
+        } catch (\Throwable) {
+            // continuer
         } finally {
             flock($lockHandle, LOCK_UN);
             fclose($lockHandle);
+        }
+    }
+
+    private function trimSlowQueryLog(string $filePath, int $maxEntries): void
+    {
+        if (! file_exists($filePath)) {
+            return;
+        }
+
+        $lines = @file($filePath, FILE_IGNORE_NEW_LINES) ?: [];
+        if (count($lines) <= $maxEntries) {
+            return;
+        }
+
+        $lines = array_slice($lines, -$maxEntries);
+
+        $tmpPath = $filePath . '.tmp.' . getmypid();
+        $written = @file_put_contents($tmpPath, implode("\n", $lines) . "\n");
+
+        if ($written !== false) {
+            @rename($tmpPath, $filePath);
+        } else {
+            @unlink($tmpPath);
         }
     }
 }

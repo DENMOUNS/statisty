@@ -49,7 +49,7 @@ final class JobsController extends BaseDashboardController
     private function pendingJobs(): array
     {
         return DB::table('jobs')
-            ->orderByDesc('id')
+            ->orderByDesc('created_at')
             ->limit(25)
             ->get()
             ->map(fn (object $job): array => [
@@ -67,7 +67,7 @@ final class JobsController extends BaseDashboardController
     private function failedJobs(): array
     {
         return DB::table('failed_jobs')
-            ->orderByDesc('id')
+            ->orderByDesc('failed_at')
             ->limit(25)
             ->get()
             ->map(fn (object $job): array => [

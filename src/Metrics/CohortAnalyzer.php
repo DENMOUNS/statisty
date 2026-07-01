@@ -116,51 +116,34 @@ final class CohortAnalyzer
 
     private function analyzeCountsOnly(string $modelClass, string $dateColumn, string $period, int $periods): array
     {
-        $buckets = [];
-        $starts = [];
+        $counts = [];
 
         $query = $modelClass::query()
             ->select([$dateColumn])
             ->orderBy($dateColumn);
 
         foreach ($query->cursor() as $item) {
-            $date = Carbon::parse($item->{$dateColumn});
-            $key = $this->bucketKey($date, $period);
-            $buckets[$key][] = $date;
-            if (! isset($starts[$key])) {
-                $starts[$key] = $date;
-            }
+            $key = $this->bucketKey(Carbon::parse($item->{$dateColumn}), $period);
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
         }
 
-        if ($buckets === []) {
+        if ($counts === []) {
             return ['labels' => [], 'matrix' => []];
         }
 
-        ksort($buckets);
+        ksort($counts);
 
-        $labels = array_keys($buckets);
+        $labels = array_keys($counts);
         $matrix = [];
 
-        // For each cohort, compute counts in cohort and next N-1 periods
+        // Note : par construction, bucketKey() et periodStart(offset=0) partagent
+        // la même granularité de période. Un événement d'un bucket donné tombe donc
+        // toujours dans sa propre période 0 — les périodes suivantes sont structurellement
+        // à zéro dans ce mode "comptage seul" (sans colonne d'identité pour suivre
+        // un même utilisateur sur plusieurs périodes).
         foreach ($labels as $label) {
-            $cohortDates = $buckets[$label];
-            $rowCounts = [];
-            $start = reset($cohortDates);
-
-            for ($p = 0; $p < max(1, $periods); $p++) {
-                $startPeriod = $this->periodStart($start, $period, $p);
-                $endPeriod = $this->periodStart($start, $period, $p + 1);
-
-                $count = 0;
-                foreach ($cohortDates as $date) {
-                    if ($date->greaterThanOrEqualTo($startPeriod) && $date->lessThan($endPeriod)) {
-                        $count++;
-                    }
-                }
-
-                $rowCounts[] = $count;
-            }
-
+            $rowCounts = array_fill(0, max(1, $periods), 0);
+            $rowCounts[0] = $counts[$label];
             $matrix[] = $rowCounts;
         }
 

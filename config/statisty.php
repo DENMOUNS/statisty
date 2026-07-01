@@ -35,6 +35,11 @@ return [
         'version' => env('STATISTY_CACHE_VERSION', 'v1'),
     ],
 
+    'response_compression' => [
+        'enabled' => env('STATISTY_RESPONSE_COMPRESSION', true),
+        'level' => env('STATISTY_RESPONSE_COMPRESSION_LEVEL', 6),
+    ],
+
     'disable_columns_cache' => env('STATISTY_DISABLE_COLUMNS_CACHE', false),
 
     'features' => [

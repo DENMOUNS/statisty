@@ -27,12 +27,67 @@
     <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 
     <!-- Highcharts + modules -->
-    <script src="https://code.highcharts.com/highcharts.js"></script>
-    <script src="https://code.highcharts.com/highcharts-more.js"></script>
-    <script src="https://code.highcharts.com/modules/heatmap.js"></script>
-    <script src="https://code.highcharts.com/modules/exporting.js"></script>
-    <script src="https://code.highcharts.com/modules/export-data.js"></script>
-    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <script>
+        (function () {
+            var primaryBase = 'https://cdn.jsdelivr.net/npm/highcharts@11.2.2';
+            var secondaryBase = 'https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.2';
+            var scripts = [
+                primaryBase + '/highcharts.js',
+                primaryBase + '/highcharts-more.js',
+                primaryBase + '/modules/heatmap.js',
+                primaryBase + '/modules/exporting.js',
+                primaryBase + '/modules/export-data.js',
+                primaryBase + '/modules/accessibility.js',
+            ];
+
+            function loadScript(src) {
+                return new Promise(function (resolve, reject) {
+                    var script = document.createElement('script');
+                    script.src = src;
+                    script.charset = 'utf-8';
+                    script.async = false;
+                    script.onload = resolve;
+                    script.onerror = function () {
+                        reject(new Error('Failed to load ' + src));
+                    };
+                    document.head.appendChild(script);
+                });
+            }
+
+            function loadScriptWithFallback(primary) {
+                return loadScript(primary).catch(function () {
+                    var fallback = primary.replace(primaryBase, secondaryBase);
+                    return loadScript(fallback);
+                });
+            }
+
+            function sequenceLoad(items) {
+                return items.reduce(function (promise, src) {
+                    return promise.then(function () {
+                        return loadScriptWithFallback(src);
+                    });
+                }, Promise.resolve());
+            }
+
+            window.Statisty = window.Statisty || {};
+            window.Statisty.highchartsReady = sequenceLoad(scripts)
+                .then(function () { return true; })
+                .catch(function (error) {
+                    console.error('[Statisty] Highcharts failed to load:', error);
+                    return false;
+                });
+
+            window.Statisty.waitForHighcharts = function (callback) {
+                window.Statisty.highchartsReady.then(function (success) {
+                    if (success) {
+                        callback(null);
+                        return;
+                    }
+                    callback(new Error('Highcharts unavailable'));
+                });
+            };
+        })();
+    </script>
 
     <script src="{{ asset('vendor/statisty/statisty.js') }}"></script>
 </head>
@@ -60,6 +115,32 @@
                 <span style="font-size:22px; font-weight:800; color:var(--text-primary); letter-spacing:-0.5px;">Statisty</span>
             </div>
 
+            @php
+                $currentRouteName = request()->route() ? request()->route()->getName() : null;
+                $routeActivePage = null;
+                if ($currentRouteName !== null) {
+                    if (str_ends_with($currentRouteName, '.workflow')) {
+                        $routeActivePage = 'workflow';
+                    } else {
+                        $routeParts = explode('.', $currentRouteName);
+                        $routeActivePage = end($routeParts);
+                    }
+                }
+
+                $activePage = $activePage ?? $routeActivePage;
+                $activeWorkflow = $activeWorkflow ?? null;
+                if ($activeWorkflow === null && request()->route()) {
+                    $routeModel = request()->route('model');
+                    if ($routeModel !== null) {
+                        $decodedModel = rawurldecode($routeModel);
+                        if (! str_starts_with($decodedModel, '\\')) {
+                            $decodedModel = '\\' . $decodedModel;
+                        }
+                        $activeWorkflow = ltrim($decodedModel, '\\');
+                    }
+                }
+            @endphp
+
             <nav class="statisty-sidebar-nav">
                 <div class="statisty-nav-section">
                     <span class="statisty-nav-section-title">Navigation</span>
@@ -76,14 +157,39 @@
                         <span class="statisty-nav-section-title">Workflows</span>
                         <div class="statisty-workflows-links">
                             @foreach($sidebarWorkflows as $workflow)
-                                <a href="{{ $workflow['url'] }}" class="statisty-nav-link statisty-workflow-link">
-                                    <span class="statisty-dot"></span>
+                                @php
+                                    $isActiveWorkflow = false;
+                                    $workflowModel = $workflow['class'] ?? null;
+
+                                    if (isset($activeWorkflow) && $activeWorkflow === $workflowModel) {
+                                        $isActiveWorkflow = true;
+                                    } else {
+                                        $currentPath = trim(request()->path(), '/');
+                                        $workflowPath = trim(parse_url($workflow['url'], PHP_URL_PATH), '/');
+                                        if ($currentPath === $workflowPath) {
+                                            $isActiveWorkflow = true;
+                                        }
+                                    }
+                                @endphp
+                                <a href="{{ $workflow['url'] }}" class="statisty-nav-link statisty-workflow-link @if($isActiveWorkflow) active @endif" @if($isActiveWorkflow) aria-current="true" @endif>
+                                    <span class="statisty-dot" style="background: @if($isActiveWorkflow) var(--color-primary) @else rgba(255,255,255,0.7) @endif"></span>
                                     <span class="statisty-workflow-name">{{ $workflow['label'] }}</span>
                                 </a>
                             @endforeach
                         </div>
                     </div>
                 @endif
+
+                <div class="statisty-nav-section statisty-theme-section">
+                    <span class="statisty-nav-section-title">Palette</span>
+                    <div class="statisty-theme-swatch-list">
+                        <button type="button" class="statisty-theme-swatch active" style="background:#ff2d20" data-theme="red" data-primary="#ff2d20" data-hover="#e0241b" data-secondary="#6366f1" aria-label="Rouge"></button>
+                        <button type="button" class="statisty-theme-swatch" style="background:#4f46e5" data-theme="indigo" data-primary="#4f46e5" data-hover="#4338ca" data-secondary="#22c55e" aria-label="Indigo"></button>
+                        <button type="button" class="statisty-theme-swatch" style="background:#10b981" data-theme="emerald" data-primary="#10b981" data-hover="#059669" data-secondary="#7c3aed" aria-label="Emerald"></button>
+                        <button type="button" class="statisty-theme-swatch" style="background:#f59e0b" data-theme="amber" data-primary="#f59e0b" data-hover="#d97706" data-secondary="#0ea5e9" aria-label="Amber"></button>
+                        <button type="button" class="statisty-theme-swatch" style="background:#0f766e" data-theme="teal" data-primary="#0f766e" data-hover="#115e59" data-secondary="#8b5cf6" aria-label="Teal"></button>
+                    </div>
+                </div>
             </nav>
 
             <div class="statisty-sidebar-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-light); margin-top: auto;">

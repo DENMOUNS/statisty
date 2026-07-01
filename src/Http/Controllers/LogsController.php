@@ -18,7 +18,9 @@ final class LogsController extends BaseDashboardController
     public function logs(Request $request)
     {
         $selectedFile = $request->query('file');
-        $logData      = $this->logData(is_string($selectedFile) ? $selectedFile : null);
+        $levelFilter  = $request->query('level');
+        $pageSize     = $request->query('page_size');
+        $logData      = $this->logData(is_string($selectedFile) ? $selectedFile : null, is_string($levelFilter) ? $levelFilter : null);
 
         return view('statisty::logs', [
             'appName'       => config('app.name'),
@@ -26,11 +28,13 @@ final class LogsController extends BaseDashboardController
             'logFiles'      => $logData['files'],
             'activeLogFile' => $logData['active'],
             'logEntries'    => $logData['entries'],
+            'activeLevel'   => $levelFilter,
+            'activePageSize'=> is_numeric($pageSize) ? (int) $pageSize : null,
             ...$this->shellData('logs'),
         ]);
     }
 
-    private function logData(?string $selectedFile = null): array
+    private function logData(?string $selectedFile = null, ?string $level = null): array
     {
         $files = collect(glob(storage_path('logs/*.log')) ?: [])
             ->map(fn (string $path): array => [
@@ -60,7 +64,7 @@ final class LogsController extends BaseDashboardController
         return [
             'files'   => $files,
             'active'  => $active,
-            'entries' => $active === null ? [] : $this->parseLogEntries($active['path']),
+            'entries' => $active === null ? [] : $this->parseLogEntries($active['path'], $level),
         ];
     }
 
@@ -71,7 +75,7 @@ final class LogsController extends BaseDashboardController
     // Après  : SplFileObject::seek() vers la fin + lecture en remontant ligne
     //          par ligne → empreinte mémoire proportionnelle à MAX_LINES seulement.
     // ─────────────────────────────────────────────────────────────────────────
-    private function parseLogEntries(string $path): array
+    private function parseLogEntries(string $path, ?string $level = null): array
     {
         if (! is_file($path) || ! is_readable($path)) {
             return [];
@@ -86,17 +90,30 @@ final class LogsController extends BaseDashboardController
                 continue;
             }
 
-            $level   = 'info';
-            $time    = null;
-            $message = $line;
+            $entryLevel = 'info';
+            $time       = null;
+            $message    = $line;
 
             if (preg_match('/^\[(.*?)\]\s+\w+\.(\w+):\s+(.*)$/s', $line, $matches) === 1) {
-                $time    = $matches[1];
-                $level   = strtolower($matches[2]);
-                $message = $matches[3];
+                $time       = $matches[1];
+                $entryLevel = strtolower($matches[2]);
+                $message    = $matches[3];
             }
 
-            $entries[] = compact('time', 'level', 'message');
+            // If a server-side level filter is requested, keep only matching entries
+            if ($level !== null) {
+                $requested = strtolower($level);
+                if ($requested !== 'all' && $requested !== $entryLevel) {
+                    // skip non-matching level
+                    continue;
+                }
+            }
+
+            $entries[] = [
+                'time' => $time,
+                'level' => $entryLevel,
+                'message' => $message,
+            ];
         }
 
         return array_reverse($entries);

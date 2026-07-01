@@ -326,6 +326,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /* ─── Rendu graphiques ───────────────────────────────────────────────── */
     function renderLine(data) {
+        if (typeof Highcharts === 'undefined') {
+            showError('hc-line', 'Highcharts n\'est pas chargé');
+            return;
+        }
+
         var labels  = data.labels  || [];
         var dataset = (data.datasets && data.datasets[0]) || { data: [], label: 'Records' };
         var color   = PALETTE[0];
@@ -391,20 +396,38 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function loadCharts() {
-        var url = buildUrl();
-        fetch(url)
-            .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-            .then(function(data) {
-                renderLine(data);
-                renderBar(data);
-                renderPie(data);
-            })
-            .catch(function(err) {
-                showError('hc-line', 'Données indisponibles');
-                showError('hc-bar',  'Données indisponibles');
-                showError('hc-pie',  'Données indisponibles');
-                console.error('[Statisty] Chart fetch error:', err);
-            });
+        if (typeof window.Statisty === 'undefined' || typeof window.Statisty.waitForHighcharts !== 'function') {
+            var msg = 'Highcharts loader unavailable';
+            showError('hc-line', msg);
+            showError('hc-bar', msg);
+            showError('hc-pie', msg);
+            return;
+        }
+
+        window.Statisty.waitForHighcharts(function (err) {
+            if (err) {
+                showError('hc-line', 'Highcharts n\'est pas chargé');
+                showError('hc-bar', 'Highcharts n\'est pas chargé');
+                showError('hc-pie', 'Highcharts n\'est pas chargé');
+                console.error('[Statisty] Highcharts load error:', err);
+                return;
+            }
+
+            var url = buildUrl();
+            fetch(url)
+                .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+                .then(function(data) {
+                    renderLine(data);
+                    renderBar(data);
+                    renderPie(data);
+                })
+                .catch(function(err) {
+                    showError('hc-line', 'Données indisponibles');
+                    showError('hc-bar',  'Données indisponibles');
+                    showError('hc-pie',  'Données indisponibles');
+                    console.error('[Statisty] Chart fetch error:', err);
+                });
+        });
     }
 
     /* ─── Sélecteurs de type ─────────────────────────────────────────────── */

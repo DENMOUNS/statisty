@@ -110,6 +110,12 @@
             var heatmapEmptyMessage = document.getElementById('heatmapEmptyMessage');
 
             function renderHeatmap() {
+                if (typeof Highcharts === 'undefined' || !Highcharts.seriesTypes || !Highcharts.seriesTypes.heatmap) {
+                    heatmapContainer.style.display = 'none';
+                    heatmapEmptyMessage.style.display = 'block';
+                    return;
+                }
+
                 if (!rawData || rawData.length === 0) {
                     heatmapContainer.style.display = 'none';
                     heatmapEmptyMessage.style.display = 'block';
@@ -193,7 +199,25 @@
                 });
             }
 
-            renderHeatmap();
+            function tryRenderHeatmap() {
+                if (typeof window.Statisty === 'undefined' || typeof window.Statisty.waitForHighcharts !== 'function') {
+                    heatmapContainer.style.display = 'none';
+                    heatmapEmptyMessage.style.display = 'block';
+                    return;
+                }
+
+                window.Statisty.waitForHighcharts(function (err) {
+                    if (err) {
+                        heatmapContainer.style.display = 'none';
+                        heatmapEmptyMessage.style.display = 'block';
+                        return;
+                    }
+
+                    renderHeatmap();
+                });
+            }
+
+            tryRenderHeatmap();
 
             function escapeHtml(value) {
                 return String(value)

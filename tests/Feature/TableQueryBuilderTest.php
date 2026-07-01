@@ -8,6 +8,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Statisty\Tables\TableQueryBuilder;
 use Statisty\Tests\TestCase;
 
@@ -38,9 +39,27 @@ class TableQueryBuilderTest extends TestCase
         ]);
 // insert some rows
         DB::table('test_models')->insert([
-            ['user_id' => 1, 'name' => 'a', 'password' => 'x', 'secret' => 's', 'created_at' => now(), 'updated_at' => now()],
-            ['user_id' => 2, 'name' => 'b', 'password' => 'y', 'secret' => 't', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => 1, 'name' => 'a', 'password' => 'x', 'secret' => 's', 'created_at' => Carbon::now()->subDay(), 'updated_at' => Carbon::now()->subDay()],
+            ['user_id' => 2, 'name' => 'b', 'password' => 'y', 'secret' => 't', 'created_at' => Carbon::now()->subHours(2), 'updated_at' => Carbon::now()->subHours(2)],
+            ['user_id' => 1, 'name' => 'c', 'password' => 'z', 'secret' => 'u', 'created_at' => Carbon::now(), 'updated_at' => Carbon::now()],
         ]);
+    }
+
+    public function test_paginate_uses_default_descending_created_at_order()
+    {
+        $model = new class extends Model {
+            protected $table = 'test_models';
+            public $timestamps = true;
+        };
+
+        $query = $model::query();
+        $qb = new TableQueryBuilder($query);
+        $results = $qb->paginate(10)->items();
+
+        $this->assertCount(3, $results);
+        $this->assertSame('c', $results[0]->name);
+        $this->assertSame('b', $results[1]->name);
+        $this->assertSame('a', $results[2]->name);
     }
 
     protected function tearDown(): void

@@ -43,7 +43,8 @@ final class WorkflowController extends BaseDashboardController
                 'appName' => config('app.name'),
                 'version' => config('statisty.version', '1.0.0'),
                 ...$workflowData,
-                ...$this->shellData('dashboard'),
+                'activeWorkflow' => $modelClass,
+                ...$this->shellData('workflow'),
             ]);
         } catch (\Throwable $e) {
             if (config('app.debug')) {

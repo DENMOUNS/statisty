@@ -59,14 +59,26 @@ final class HealthController extends BaseDashboardController
 
     private function loadPersistedSlowQueries(): array
     {
-        $filePath = storage_path('logs/statisty_slow_queries.json');
+        $filePath = storage_path('logs/statisty_slow_queries.ndjson');
         if (! file_exists($filePath)) {
             return [];
         }
 
+        $slowQueries = [];
+
         try {
-            $content = @file_get_contents($filePath);
-            $slowQueries = $content ? json_decode($content, true) ?: [] : [];
+            $lines = @file($filePath, FILE_IGNORE_NEW_LINES) ?: [];
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+
+                $decoded = json_decode($line, true);
+                if (is_array($decoded)) {
+                    $slowQueries[] = $decoded;
+                }
+            }
         } catch (\Throwable $e) {
             return [];
         }

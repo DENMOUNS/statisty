@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Statisty\Http\Resources;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Statisty\Support\ModelSchema;
 
@@ -20,7 +21,20 @@ final class TableRowResource extends JsonResource
 
         $data = parent::toArray($request);
 
-        // remove hidden columns from root model data
+        // Les relations chargées (ex: "user") sont sérialisées par défaut
+        // par Eloquent::toArray() sous forme d'objet imbriqué. On les
+        // retire systématiquement : elles ne sont réintroduites que de
+        // façon contrôlée ci-dessous, sous forme de colonnes aplaties
+        // (ex: "user.email"), jamais sous forme d'objet pouvant exposer
+        // un id ou une clé étrangère non filtrée.
+        if ($this->resource instanceof Model) {
+            foreach (array_keys($this->resource->getRelations()) as $relationKey) {
+                unset($data[$relationKey]);
+            }
+        }
+
+        // remove hidden columns from root model data (inclut désormais
+        // toujours la clé primaire et les clés étrangères du modèle)
         foreach ($hidden as $col) {
             if (array_key_exists($col, $data)) {
                 unset($data[$col]);
@@ -85,11 +99,18 @@ final class TableRowResource extends JsonResource
         if (! isset($this->hiddenCache[$modelClass])) {
             try {
                 $instance = $this->resolveModelInstance($modelClass);
-                if ($instance && method_exists($instance, 'getHidden')) {
-                    $this->hiddenCache[$modelClass] = array_merge($hidden, (array) $instance->getHidden());
-                } else {
-                    $this->hiddenCache[$modelClass] = $hidden;
-                }
+                $modelHidden = $instance && method_exists($instance, 'getHidden') ? (array) $instance->getHidden() : [];
+
+                // La clé primaire et les clés étrangères (belongsTo) ne sont
+                // JAMAIS exposées : on affiche le champ de la relation à la
+                // place (géré côté sélection / front via les colonnes en
+                // notation pointée "relation.champ").
+                $idColumns = array_merge(
+                    [ModelSchema::primaryKey($modelClass)],
+                    ModelSchema::foreignKeyColumns($modelClass),
+                );
+
+                $this->hiddenCache[$modelClass] = array_values(array_unique(array_merge($hidden, $modelHidden, $idColumns)));
             } catch (\Throwable) {
                 $this->hiddenCache[$modelClass] = $hidden;
             }

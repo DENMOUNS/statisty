@@ -6,6 +6,7 @@ namespace Statisty\Services;
 
 use Illuminate\Support\Facades\DB;
 use Statisty\Discovery\RelationshipProfile;
+use Statisty\Support\DisplayRowFetcher;
 use Statisty\Support\ModelName;
 use Statisty\Support\ModelSchema;
 
@@ -13,7 +14,7 @@ final class WorkflowService
 {
     public function build(string $modelClass): array
     {
-        $columns = ModelSchema::visibleColumns($modelClass);
+        $columns = ModelSchema::displayColumns($modelClass);
         $numericColumns = array_values(array_filter($columns, function (string $col): bool {
             $lower = strtolower($col);
             foreach (['amount', 'total', 'price', 'quantity', 'value', 'points', 'sum', 'count', 'score', 'total_amount', 'subtotal', 'revenue', 'cost', 'fee', 'tax', 'discount', 'weight', 'balance', 'salary', 'rate'] as $keyword) {
@@ -94,13 +95,15 @@ final class WorkflowService
             }
         }
 
+        $apiPrefix = trim((string) config('statisty.routes.api.prefix', 'api/statisty'), '/');
+
         return [
             'modelLabel' => ModelName::label($modelClass),
             'modelClass' => $modelClass,
             'kpis' => $kpis,
             'columns' => $columns,
             'rows' => $this->recentRows($modelClass, $columns, 50),
-            'chartUrl' => url(trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/') . '/charts/' . str_replace('\\', '%5C', $modelClass)),
+            'chartUrl' => url($apiPrefix . '/charts/' . rawurlencode($modelClass)),
             'relatedPanels' => $this->buildRelatedPanels($modelClass),
             'statusBreakdown' => $statusBreakdown,
             'statusColumns' => $statusColumns,
@@ -186,28 +189,7 @@ final class WorkflowService
 
     private function recentRows(string $modelClass, array $columns, int $limit = 50): array
     {
-        if ($columns === [] || ! method_exists($modelClass, 'query')) {
-            return [];
-        }
-
-        try {
-            $query = $modelClass::query()->select($columns)->limit($limit);
-
-            if (in_array('created_at', $columns, true)) {
-                $query->latest('created_at');
-            }
-
-            return $query->get()
-                ->map(fn (mixed $row): array => collect($row->toArray())
-                    ->only($columns)
-                    ->map(fn (mixed $val): mixed => is_scalar($val) || $val === null
-                        ? $val
-                        : json_encode($val))
-                    ->all())
-                ->all();
-        } catch (\Throwable $e) {
-            return [];
-        }
+        return DisplayRowFetcher::fetch($modelClass, $columns, $limit);
     }
 
     private function buildChartMetrics(string $modelClass, array $numericColumns): array
@@ -296,7 +278,7 @@ final class WorkflowService
             }
 
             $wantedCols = (array) ($relConfig['columns'] ?? []);
-            $availableCols = ModelSchema::visibleColumns($relatedClass);
+            $availableCols = ModelSchema::displayColumns($relatedClass);
             $cols = $wantedCols !== []
                 ? array_values(array_intersect($wantedCols, $availableCols))
                 : array_slice($availableCols, 0, 5);
@@ -307,20 +289,7 @@ final class WorkflowService
 
             try {
                 $relatedCount = (int) $relatedClass::query()->count();
-
-                $sampleQuery = $relatedClass::query()->select($cols)->limit(15);
-                if (in_array('created_at', $cols, true)) {
-                    $sampleQuery->latest('created_at');
-                }
-
-                $sample = $sampleQuery->get()
-                    ->map(fn (mixed $row): array => collect($row->toArray())
-                        ->only($cols)
-                        ->map(fn (mixed $v): mixed => is_scalar($v) || $v === null
-                            ? $v
-                            : json_encode($v))
-                        ->all())
-                    ->all();
+                $sample = DisplayRowFetcher::fetch($relatedClass, $cols, 15);
             } catch (\Throwable $e) {
                 $relatedCount = 0;
                 $sample = [];

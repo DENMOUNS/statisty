@@ -96,11 +96,11 @@
                 <div class="statisty-doc-panel-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
                     <div>
                         <h2>API Documentation</h2>
-                        <p class="statisty-muted">Générez la documentation de vos routes API et exportez-la en Markdown.</p>
+                        <p class="statisty-muted">Générez la documentation de vos routes API et exportez-la.</p>
                     </div>
-                    <button id="downloadMarkdownBtn" class="statisty-btn-primary" style="display:flex; align-items:center; gap:8px;">
-                        <span>💾 Télécharger en Markdown</span>
-                    </button>
+                    <a id="downloadOpenApiBtn" href="{{ url(trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/') . '/docs/openapi.json') }}" download="openapi.json" class="statisty-btn-primary" style="display:flex; align-items:center; gap:8px; text-decoration:none;">
+                        <span>📥 Exporter OpenAPI (JSON)</span>
+                    </a>
                 </div>
 
                 @if(empty($apiDocs))
@@ -331,69 +331,6 @@
             setActiveTab('webRoutesTab');
             if (searchInput) searchInput.addEventListener('input', filterDocs);
             if (methodFilter) methodFilter.addEventListener('change', filterDocs);
-
-            // Handle Markdown Download
-            const downloadBtn = document.getElementById('downloadMarkdownBtn');
-            if (downloadBtn) {
-                downloadBtn.addEventListener('click', function() {
-                    const apiData = @json($apiDocs);
-                    let md = `# API Documentation\n\n`;
-                    md += `Généré automatiquement par **Statisty** le ${new Date().toLocaleDateString()} à ${new Date().toLocaleTimeString()}.\n\n---\n\n`;
-
-                    apiData.forEach(route => {
-                        const methodsStr = route.methods.join(', ');
-                        md += `## [${methodsStr}] ${route.uri}\n\n`;
-                        if (route.is_deprecated) {
-                            md += `⚠️ **DEPRECATED**\n\n`;
-                        }
-                        md += `*   **Description :** ${route.description}\n`;
-                        md += `*   **Action Contrôleur :** \`${route.action}\`\n`;
-                        if (route.name) {
-                            md += `*   **Nom de la route :** \`${route.name}\`\n`;
-                        }
-                        md += `*   **Middlewares :** \`${route.middleware.join(', ') || 'aucun'}\`\n`;
-                        if (route.response_type) {
-                            md += `*   **Type de retour :** \`${route.response_type}\`\n`;
-                        }
-                        md += `\n`;
-
-                        if (route.params && route.params.length > 0) {
-                            md += `### Paramètres d'URL\n\n`;
-                            md += `| Paramètre | Type | Obligatoire |\n`;
-                            md += `| --- | --- | --- |\n`;
-                            route.params.forEach(p => {
-                                md += `| \`${p.name}\` | ${p.type} | ${p.required ? 'Oui' : 'Non'} |\n`;
-                            });
-                            md += `\n`;
-                        }
-
-                        if (route.validation_rules && route.validation_rules.length > 0) {
-                            md += `### Corps de la Requête (Validation FormRequest)\n\n`;
-                            md += `| Champ | Règles | Obligatoire |\n`;
-                            md += `| --- | --- | --- |\n`;
-                            route.validation_rules.forEach(r => {
-                                md += `| **\`${r.field}\`** | \`${r.rules}\` | ${r.required ? 'Requis' : 'Optionnel'} |\n`;
-                            });
-                            md += `\n`;
-                        }
-
-                        md += `### Exemple de commande cURL\n\n`;
-                        md += `\`\`\`bash\n`;
-                        md += `curl -X ${route.methods[0]} "${window.location.origin}${route.uri}"\n`;
-                        md += `\`\`\`\n\n`;
-                        md += `---\n\n`;
-                    });
-
-                    // Download File
-                    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.setAttribute('download', 'api_documentation.md');
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                });
-            }
         });
     </script>
 

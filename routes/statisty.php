@@ -33,7 +33,7 @@ if ((bool) ($apiRoutesData['enabled'] ?? true)) {
     $apiMiddleware  = array_values((array) ($apiRoutesData['middleware'] ?? []));
 
     Route::prefix($apiPrefix)
-        ->middleware(array_values(array_merge($apiMiddleware, $sharedMiddleware())))
+        ->middleware(array_values(array_merge(['statisty.compress'], $apiMiddleware, $sharedMiddleware())))
         ->name('statisty.api.')
         ->group(function () use ($authMiddleware, $modelConstraint) {
             Route::get('health', function () {
@@ -66,7 +66,7 @@ if ((bool) ($webRoutesData['enabled'] ?? true)) {
     $webMiddleware = array_values((array) ($webRoutesData['middleware'] ?? ['web']));
 
     Route::prefix($webPrefix)
-        ->middleware(array_values(array_merge($webMiddleware, $sharedMiddleware())))
+        ->middleware(array_values(array_merge(['statisty.compress'], $webMiddleware, $sharedMiddleware())))
         ->name('statisty.web.')
         ->group(function () use ($authMiddleware, $modelConstraint) {
             Route::middleware($authMiddleware())->group(function () use ($modelConstraint) {
@@ -78,6 +78,7 @@ if ((bool) ($webRoutesData['enabled'] ?? true)) {
                 Route::get('logs',    [\Statisty\Http\Controllers\LogsController::class,   'logs'])->name('logs');
                 Route::get('jobs',    [\Statisty\Http\Controllers\JobsController::class,   'jobs'])->name('jobs');
                 Route::get('docs',    [\Statisty\Http\Controllers\DocController::class,    'index'])->name('docs');
+                Route::get('docs/openapi.json', [\Statisty\Http\Controllers\DocController::class, 'openApi'])->name('docs.openapi');
             });
         });
 }
