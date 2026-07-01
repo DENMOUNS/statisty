@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ asset('vendor/statisty/statisty.css') }}">
+    <link rel="stylesheet" href="{{ asset('vendor/statisty/statisty.css') }}?v={{ file_exists(public_path('vendor/statisty/statisty.css')) ? filemtime(public_path('vendor/statisty/statisty.css')) : time() }}">
 
     <!-- DataTables CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
@@ -29,8 +29,8 @@
     <!-- Highcharts + modules -->
     <script>
         (function () {
-            var primaryBase = 'https://cdn.jsdelivr.net/npm/highcharts@11.2.2';
-            var secondaryBase = 'https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.2';
+            var primaryBase = 'https://code.highcharts.com/11.2.2';
+            var secondaryBase = 'https://cdn.jsdelivr.net/npm/highcharts@11.2.2';
             var scripts = [
                 primaryBase + '/highcharts.js',
                 primaryBase + '/highcharts-more.js',
@@ -89,25 +89,203 @@
         })();
     </script>
 
-    <script src="{{ asset('vendor/statisty/statisty.js') }}"></script>
+    <script src="{{ asset('vendor/statisty/statisty.js') }}?v={{ file_exists(public_path('vendor/statisty/statisty.js')) ? filemtime(public_path('vendor/statisty/statisty.js')) : time() }}"></script>
+    <style>
+        .statisty-navbar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 60px;
+            padding: 0 24px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        .statisty-navbar-container {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .statisty-navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 800;
+            color: #111827;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .statisty-navbar-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .statisty-navbar-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 38px;
+            padding: 0 14px;
+            border-radius: 8px;
+            color: #4b5563;
+            font-size: 14px;
+            font-weight: 700;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .statisty-navbar-link:hover,
+        .statisty-navbar-link.active {
+            color: #ff2d20;
+            background: rgba(255, 45, 32, 0.08);
+        }
+
+        .statisty-navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .statisty-navbar-theme-picker {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .statisty-navbar-theme-btn {
+            width: 34px;
+            height: 34px;
+            border: 2px solid transparent;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .statisty-navbar-theme-btn[data-theme="red"] { background: #ff5252; }
+        .statisty-navbar-theme-btn[data-theme="deep-purple"] { background: #7c4dff; }
+        .statisty-navbar-theme-btn[data-theme="teal"] { background: #009688; }
+        .statisty-navbar-theme-btn[data-theme="amber"] { background: #ffb300; }
+        .statisty-navbar-theme-btn[data-theme="pink"] { background: #e91e63; }
+
+        .statisty-navbar-theme-btn:hover,
+        .statisty-navbar-theme-btn.active {
+            transform: translateY(-1px);
+            border-color: rgba(0, 0, 0, 0.16);
+            box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.08);
+        }
+
+        .statisty-navbar-menu-toggle {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #111827;
+            cursor: pointer;
+        }
+
+        @media (max-width: 991px) {
+            .statisty-navbar-center {
+                display: none;
+            }
+
+            .statisty-navbar-theme-picker {
+                gap: 6px;
+            }
+
+            .statisty-navbar-theme-btn {
+                width: 28px;
+                height: 28px;
+            }
+
+            .statisty-navbar-menu-toggle {
+                display: inline-flex;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="statisty-layout">
-        <!-- Mobile Header -->
-        <header class="statisty-mobile-header">
-            <div class="statisty-mobile-brand" style="display:flex; align-items:center; gap:8px;">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ff2d20" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-5 5"/></svg>
-                <span style="font-size:18px; font-weight:800; color:var(--text-primary); letter-spacing:-0.5px;">Statisty</span>
-            </div>
-            <button id="statistySidebarToggle" aria-label="Toggle Menu" class="statisty-btn-toggle">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                </svg>
-            </button>
-        </header>
+    @php
+        $currentRouteName = request()->route() ? request()->route()->getName() : null;
+        $routeActivePage = null;
+        if ($currentRouteName !== null) {
+            if (str_ends_with($currentRouteName, '.workflow')) {
+                $routeActivePage = 'workflow';
+            } else {
+                $routeParts = explode('.', $currentRouteName);
+                $routeActivePage = end($routeParts);
+            }
+        }
 
+        $activePage = $activePage ?? $routeActivePage;
+
+        $activeWorkflow = $activeWorkflow ?? null;
+        if ($activeWorkflow !== null) {
+            $activeWorkflow = ltrim(rawurldecode((string) $activeWorkflow), '\\');
+        } elseif (request()->route()) {
+            $routeModel = request()->route('model');
+            if ($routeModel !== null) {
+                $activeWorkflow = ltrim(rawurldecode((string) $routeModel), '\\');
+            }
+        }
+    @endphp
+
+    <!-- Global Navbar -->
+    <nav class="statisty-navbar">
+        <div class="statisty-navbar-container">
+            <div class="statisty-navbar-left">
+                <a class="statisty-navbar-brand" href="{{ url(trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/') . '/dashboard') }}">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ff2d20" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-5 5"/></svg>
+                    <span>Statisty</span>
+                </a>
+            </div>
+
+            <div class="statisty-navbar-center">
+                @foreach($statistyNav ?? [] as $nav)
+                    <a href="{{ $nav['url'] }}" class="statisty-navbar-link @if(($activePage ?? '') === $nav['key']) active @endif">
+                        {{ $nav['label'] }}
+                    </a>
+                @endforeach
+            </div>
+
+            <div class="statisty-navbar-right">
+                <div class="statisty-navbar-theme-picker" role="group" aria-label="Choisir une couleur">
+                    <button type="button" class="statisty-navbar-theme-btn" data-theme="red" aria-label="Rouge"></button>
+                    <button type="button" class="statisty-navbar-theme-btn" data-theme="deep-purple" aria-label="Violet"></button>
+                    <button type="button" class="statisty-navbar-theme-btn" data-theme="teal" aria-label="Sarcelle"></button>
+                    <button type="button" class="statisty-navbar-theme-btn" data-theme="amber" aria-label="Ambre"></button>
+                    <button type="button" class="statisty-navbar-theme-btn" data-theme="pink" aria-label="Rose"></button>
+                </div>
+                <button id="statistySidebarToggle" aria-label="Toggle Menu" class="statisty-navbar-menu-toggle">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="statisty-layout">
         <!-- Sidebar -->
         <aside class="statisty-sidebar" id="statistySidebar">
             <div class="statisty-sidebar-brand" style="display:flex; align-items:center; gap:10px; padding: 24px 24px 12px 24px;">
@@ -115,61 +293,15 @@
                 <span style="font-size:22px; font-weight:800; color:var(--text-primary); letter-spacing:-0.5px;">Statisty</span>
             </div>
 
-            @php
-                $currentRouteName = request()->route() ? request()->route()->getName() : null;
-                $routeActivePage = null;
-                if ($currentRouteName !== null) {
-                    if (str_ends_with($currentRouteName, '.workflow')) {
-                        $routeActivePage = 'workflow';
-                    } else {
-                        $routeParts = explode('.', $currentRouteName);
-                        $routeActivePage = end($routeParts);
-                    }
-                }
-
-                $activePage = $activePage ?? $routeActivePage;
-                $activeWorkflow = $activeWorkflow ?? null;
-                if ($activeWorkflow === null && request()->route()) {
-                    $routeModel = request()->route('model');
-                    if ($routeModel !== null) {
-                        $decodedModel = rawurldecode($routeModel);
-                        if (! str_starts_with($decodedModel, '\\')) {
-                            $decodedModel = '\\' . $decodedModel;
-                        }
-                        $activeWorkflow = ltrim($decodedModel, '\\');
-                    }
-                }
-            @endphp
-
             <nav class="statisty-sidebar-nav">
-                <div class="statisty-nav-section">
-                    <span class="statisty-nav-section-title">Navigation</span>
-                    @foreach($statistyNav ?? [] as $nav)
-                        <a href="{{ $nav['url'] }}" class="statisty-nav-link @if(($activePage ?? '') === $nav['key']) active @endif">
-                            <span class="statisty-nav-icon-placeholder statisty-icon-{{ $nav['key'] }}"></span>
-                            {{ $nav['label'] }}
-                        </a>
-                    @endforeach
-                </div>
-
                 @if(!empty($sidebarWorkflows))
                     <div class="statisty-nav-section">
                         <span class="statisty-nav-section-title">Workflows</span>
                         <div class="statisty-workflows-links">
                             @foreach($sidebarWorkflows as $workflow)
                                 @php
-                                    $isActiveWorkflow = false;
-                                    $workflowModel = $workflow['class'] ?? null;
-
-                                    if (isset($activeWorkflow) && $activeWorkflow === $workflowModel) {
-                                        $isActiveWorkflow = true;
-                                    } else {
-                                        $currentPath = trim(request()->path(), '/');
-                                        $workflowPath = trim(parse_url($workflow['url'], PHP_URL_PATH), '/');
-                                        if ($currentPath === $workflowPath) {
-                                            $isActiveWorkflow = true;
-                                        }
-                                    }
+                                    $workflowModel = ltrim((string) ($workflow['class'] ?? ''), '\\');
+                                    $isActiveWorkflow = $activeWorkflow !== null && $activeWorkflow === $workflowModel;
                                 @endphp
                                 <a href="{{ $workflow['url'] }}" class="statisty-nav-link statisty-workflow-link @if($isActiveWorkflow) active @endif" @if($isActiveWorkflow) aria-current="true" @endif>
                                     <span class="statisty-dot" style="background: @if($isActiveWorkflow) var(--color-primary) @else rgba(255,255,255,0.7) @endif"></span>
@@ -179,17 +311,6 @@
                         </div>
                     </div>
                 @endif
-
-                <div class="statisty-nav-section statisty-theme-section">
-                    <span class="statisty-nav-section-title">Palette</span>
-                    <div class="statisty-theme-swatch-list">
-                        <button type="button" class="statisty-theme-swatch active" style="background:#ff2d20" data-theme="red" data-primary="#ff2d20" data-hover="#e0241b" data-secondary="#6366f1" aria-label="Rouge"></button>
-                        <button type="button" class="statisty-theme-swatch" style="background:#4f46e5" data-theme="indigo" data-primary="#4f46e5" data-hover="#4338ca" data-secondary="#22c55e" aria-label="Indigo"></button>
-                        <button type="button" class="statisty-theme-swatch" style="background:#10b981" data-theme="emerald" data-primary="#10b981" data-hover="#059669" data-secondary="#7c3aed" aria-label="Emerald"></button>
-                        <button type="button" class="statisty-theme-swatch" style="background:#f59e0b" data-theme="amber" data-primary="#f59e0b" data-hover="#d97706" data-secondary="#0ea5e9" aria-label="Amber"></button>
-                        <button type="button" class="statisty-theme-swatch" style="background:#0f766e" data-theme="teal" data-primary="#0f766e" data-hover="#115e59" data-secondary="#8b5cf6" aria-label="Teal"></button>
-                    </div>
-                </div>
             </nav>
 
             <div class="statisty-sidebar-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-light); margin-top: auto;">
@@ -212,8 +333,32 @@
         document.addEventListener('DOMContentLoaded', function () {
             const toggleBtn = document.getElementById('statistySidebarToggle');
             const sidebar   = document.getElementById('statistySidebar');
+            const themeButtons = document.querySelectorAll('.statisty-navbar-theme-btn');
+            const savedTheme = localStorage.getItem('statisty-theme') || 'red';
+
             if (toggleBtn && sidebar) {
-                toggleBtn.addEventListener('click', function () { sidebar.classList.toggle('open'); });
+                toggleBtn.addEventListener('click', function () {
+                    sidebar.classList.toggle('open');
+                });
+            }
+
+            function applyTheme(theme) {
+                document.body.dataset.theme = theme;
+                localStorage.setItem('statisty-theme', theme);
+
+                themeButtons.forEach(function (button) {
+                    button.classList.toggle('active', button.dataset.theme === theme);
+                });
+            }
+
+            themeButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    applyTheme(button.dataset.theme);
+                });
+            });
+
+            if (savedTheme) {
+                applyTheme(savedTheme);
             }
         });
     </script>

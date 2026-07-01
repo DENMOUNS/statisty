@@ -118,6 +118,13 @@ final class ModelSchemaRelationInspector
         return $candidates[0] ?? null;
     }
 
+    /**
+     * Retourne les colonnes "d'affichage" d'un modèle : la clé primaire
+     * n'y figure jamais, et toute colonne considérée comme clé étrangère
+     * (relation BelongsTo résolue OU convention "xxx_id" sans relation
+     * exploitable) est soit remplacée par "relation.champ" soit masquée
+     * purement et simplement si aucune relation n'a pu être résolue.
+     */
     public static function displayColumns(string|Model $model): array
     {
         $class = ModelSchema::modelClass($model);
@@ -129,6 +136,7 @@ final class ModelSchemaRelationInspector
 
         $pk = ModelSchema::primaryKey($class);
         $belongsTo = ModelSchemaCache::belongsToRelations($class);
+        $allForeignKeys = ModelSchemaCache::foreignKeyColumns($class);
         $fkToRelation = [];
 
         foreach ($belongsTo as $relationName => $info) {
@@ -159,6 +167,13 @@ final class ModelSchemaRelationInspector
                     $result[] = $relationName . '.' . $field;
                 }
 
+                continue;
+            }
+
+            // Colonne détectée comme clé étrangère par convention de
+            // nommage mais sans relation Eloquent exploitable : on la
+            // masque plutôt que de l'exposer brute (id numérique).
+            if (in_array($column, $allForeignKeys, true)) {
                 continue;
             }
 

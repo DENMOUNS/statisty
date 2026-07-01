@@ -64,6 +64,9 @@ return [
         //     'relations' => [
         //         'user' => ['columns' => ['id', 'email']],
         //     ],
+        //     // Colonnes en "xxx_id" à NE PAS masquer malgré la convention
+        //     // de nommage (ex: un identifiant externe qui n'est pas une FK) :
+        //     'expose_id_columns' => ['external_id'],
         // ],
     ],
 
@@ -89,6 +92,10 @@ return [
         'hidden_columns' => [
             'password', 'remember_token', 'api_token', 'token', 'secret',
         ],
+        // Masque toute colonne se terminant par "_id" (hors clé primaire)
+        // qui n'est rattachée à aucune relation Eloquent résolue. Empêche
+        // la fuite de clés étrangères "orphelines" (sans belongsTo() déclaré).
+        'hide_unmapped_foreign_keys' => env('STATISTY_HIDE_UNMAPPED_FK', true),
     ],
 
     'disabled_models' => [

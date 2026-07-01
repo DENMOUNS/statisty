@@ -12,6 +12,10 @@ final class RelationshipProfile
     /**
      * Inspecte un modèle Eloquent et tente d'identifier ses relations.
      * Retourne un tableau: [relationName => ['type' => 'HasMany', 'related' => RelatedClass]]
+     *
+     * On détecte aussi les relations héritées d'une classe parente
+     * ou définies dans un trait, et pas uniquement celles déclarées
+     * directement sur la classe du modèle.
      */
     public function profileModel(string $modelClass): array
     {
@@ -29,11 +33,13 @@ final class RelationshipProfile
 
         $ref = new \ReflectionClass($model);
         foreach ($ref->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
-            if ($method->getDeclaringClass()->getName() !== $ref->getName()) {
+            $declaringClass = $method->getDeclaringClass()->getName();
+
+            if (str_starts_with($declaringClass, 'Illuminate\\')) {
                 continue;
             }
 
-            if ($method->getNumberOfParameters() > 0) {
+            if ($method->getNumberOfRequiredParameters() > 0 || $method->isStatic() || $method->isAbstract()) {
                 continue;
             }
 

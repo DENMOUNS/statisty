@@ -116,7 +116,14 @@
             };
         });
 
-        document.addEventListener('DOMContentLoaded', function() {
+        function showStatusChartError(message) {
+            var el = document.getElementById('hc-status-{{ $loop->index }}');
+            if (el) {
+                el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#a1a1aa;font-size:13px;font-weight:600;">' + message + '</div>';
+            }
+        }
+
+        function renderStatusChart() {
             Highcharts.chart('hc-status-{{ $loop->index }}', {
                 chart: {
                     type: 'pie',
@@ -154,6 +161,23 @@
                 },
                 series: [{ name: '{{ $statusCol }}', colorByPoint: true, data: pieData }],
                 exporting: { enabled: true }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof window.Statisty === 'undefined' || typeof window.Statisty.waitForHighcharts !== 'function') {
+                showStatusChartError('Highcharts loader unavailable');
+                return;
+            }
+
+            window.Statisty.waitForHighcharts(function(err) {
+                if (err || typeof Highcharts === 'undefined') {
+                    showStatusChartError('Highcharts n\'est pas chargÃ©');
+                    console.error('[Statisty] Highcharts status chart load error:', err);
+                    return;
+                }
+
+                renderStatusChart();
             });
         });
     })();
