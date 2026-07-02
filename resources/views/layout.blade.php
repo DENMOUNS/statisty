@@ -29,15 +29,11 @@
     <!-- Highcharts + modules -->
     <script>
         (function () {
-            var primaryBase = 'https://code.highcharts.com/11.2.2';
-            var secondaryBase = 'https://cdn.jsdelivr.net/npm/highcharts@11.2.2';
-            var scripts = [
-                primaryBase + '/highcharts.js',
-                primaryBase + '/highcharts-more.js',
-                primaryBase + '/modules/heatmap.js',
-                primaryBase + '/modules/exporting.js',
-                primaryBase + '/modules/export-data.js',
-                primaryBase + '/modules/accessibility.js',
+            var cdnBases = [
+                'https://code.highcharts.com/11.2.2',
+                'https://cdn.jsdelivr.net/npm/highcharts@11.2.2',
+                'https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.2',
+                'https://unpkg.com/highcharts@11.2.2',
             ];
 
             function loadScript(src) {
@@ -54,28 +50,67 @@
                 });
             }
 
-            function loadScriptWithFallback(primary) {
-                return loadScript(primary).catch(function () {
-                    var fallback = primary.replace(primaryBase, secondaryBase);
-                    return loadScript(fallback);
-                });
+            function loadScriptWithFallback(path) {
+                var index = 0;
+
+                function tryNext() {
+                    if (index >= cdnBases.length) {
+                        return Promise.reject(new Error('Failed to load ' + path + ' from all CDNs.'));
+                    }
+
+                    var url = cdnBases[index] + '/' + path;
+                    index += 1;
+
+                    return loadScript(url).catch(function (error) {
+                        console.warn('[Statisty] CDN fallback failed for', url, error);
+                        return tryNext();
+                    });
+                }
+
+                return tryNext();
             }
 
-            function sequenceLoad(items) {
-                return items.reduce(function (promise, src) {
-                    return promise.then(function () {
-                        return loadScriptWithFallback(src);
-                    });
-                }, Promise.resolve());
+            function loadScriptsParallel(paths) {
+                return Promise.all(paths.map(loadScriptWithFallback));
             }
 
             window.Statisty = window.Statisty || {};
-            window.Statisty.highchartsReady = sequenceLoad(scripts)
+            window.Statisty.highchartsReady = loadScriptWithFallback('highcharts.js')
                 .then(function () { return true; })
                 .catch(function (error) {
-                    console.error('[Statisty] Highcharts failed to load:', error);
+                    console.error('[Statisty] Highcharts core failed to load:', error);
                     return false;
                 });
+
+            window.Statisty.heatmapReady = window.Statisty.highchartsReady.then(function (success) {
+                if (!success) {
+                    return false;
+                }
+                return loadScriptWithFallback('modules/heatmap.js')
+                    .then(function () { return true; })
+                    .catch(function (error) {
+                        console.warn('[Statisty] Highcharts heatmap module failed to load:', error);
+                        return false;
+                    });
+            });
+
+            window.Statisty.optionalModulesReady = window.Statisty.highchartsReady.then(function (success) {
+                if (!success) {
+                    return false;
+                }
+                return Promise.allSettled([
+                    loadScriptWithFallback('highcharts-more.js'),
+                    loadScriptWithFallback('modules/exporting.js'),
+                    loadScriptWithFallback('modules/export-data.js'),
+                    loadScriptWithFallback('modules/accessibility.js')
+                ]).then(function (results) {
+                    var failed = results.filter(function (result) { return result.status === 'rejected'; });
+                    if (failed.length) {
+                        console.warn('[Statisty] Some Highcharts optional scripts failed to load:', failed.map(function (result) { return result.reason; }));
+                    }
+                    return true;
+                });
+            });
 
             window.Statisty.waitForHighcharts = function (callback) {
                 window.Statisty.highchartsReady.then(function (success) {
@@ -84,6 +119,16 @@
                         return;
                     }
                     callback(new Error('Highcharts unavailable'));
+                });
+            };
+
+            window.Statisty.waitForHeatmap = function (callback) {
+                window.Statisty.heatmapReady.then(function (success) {
+                    if (success) {
+                        callback(null);
+                        return;
+                    }
+                    callback(new Error('Highcharts heatmap unavailable'));
                 });
             };
         })();
@@ -141,17 +186,18 @@
             min-height: 38px;
             padding: 0 14px;
             border-radius: 8px;
-            color: #4b5563;
+            color: var(--text-secondary);
             font-size: 14px;
             font-weight: 700;
             text-decoration: none;
             white-space: nowrap;
+            transition: color 0.15s ease, background-color 0.15s ease;
         }
 
         .statisty-navbar-link:hover,
         .statisty-navbar-link.active {
-            color: #ff2d20;
-            background: rgba(255, 45, 32, 0.08);
+            color: var(--color-primary);
+            background: var(--color-primary-soft, rgba(255, 45, 32, 0.08));
         }
 
         .statisty-navbar-right {
@@ -164,29 +210,64 @@
         .statisty-navbar-theme-picker {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .statisty-navbar-theme-btn {
-            width: 34px;
-            height: 34px;
-            border: 2px solid transparent;
+            width: 18px;
+            height: 18px;
+            border: 1px solid transparent;
             border-radius: 50%;
             cursor: pointer;
             transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
         }
 
-        .statisty-navbar-theme-btn[data-theme="red"] { background: #ff5252; }
-        .statisty-navbar-theme-btn[data-theme="deep-purple"] { background: #7c4dff; }
-        .statisty-navbar-theme-btn[data-theme="teal"] { background: #009688; }
-        .statisty-navbar-theme-btn[data-theme="amber"] { background: #ffb300; }
-        .statisty-navbar-theme-btn[data-theme="pink"] { background: #e91e63; }
+        .statisty-navbar-theme-btn[data-theme="red"] { background: #ef9a9a; }
+        .statisty-navbar-theme-btn[data-theme="deep-purple"] { background: #9575cd; }
+        .statisty-navbar-theme-btn[data-theme="teal"] { background: #4db6ac; }
+        .statisty-navbar-theme-btn[data-theme="amber"] { background: #ffb74d; }
+        .statisty-navbar-theme-btn[data-theme="pink"] { background: #f48fb1; }
+        .statisty-navbar-theme-btn[data-theme="blue"] { background: #64b5f6; }
+        .statisty-navbar-theme-btn[data-theme="green"] { background: #81c784; }
 
         .statisty-navbar-theme-btn:hover,
         .statisty-navbar-theme-btn.active {
             transform: translateY(-1px);
             border-color: rgba(0, 0, 0, 0.16);
-            box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .statisty-navbar-theme-toggle {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            background: #ffffff;
+            color: #374151;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+
+        .statisty-navbar-theme-toggle:hover,
+        .statisty-navbar-theme-toggle.active {
+            transform: translateY(-1px);
+            border-color: rgba(59, 130, 246, 0.35);
+            color: #1d4ed8;
+        }
+
+        .statisty-icon-sun {
+            display: inline-block;
+            opacity: 1;
+            transition: opacity var(--transition-fast), transform var(--transition-fast);
+        }
+
+        .statisty-icon-moon {
+            display: none;
+            opacity: 0;
+            transition: opacity var(--transition-fast), transform var(--transition-fast);
         }
 
         .statisty-navbar-menu-toggle {
@@ -212,8 +293,8 @@
             }
 
             .statisty-navbar-theme-btn {
-                width: 28px;
-                height: 28px;
+                width: 18px;
+                height: 18px;
             }
 
             .statisty-navbar-menu-toggle {
@@ -251,13 +332,6 @@
     <!-- Global Navbar -->
     <nav class="statisty-navbar">
         <div class="statisty-navbar-container">
-            <div class="statisty-navbar-left">
-                <a class="statisty-navbar-brand" href="{{ url(trim((string) config('statisty.routes.web.prefix', 'web/statisty'), '/') . '/dashboard') }}">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ff2d20" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-5 5"/></svg>
-                    <span>Statisty</span>
-                </a>
-            </div>
-
             <div class="statisty-navbar-center">
                 @foreach($statistyNav ?? [] as $nav)
                     <a href="{{ $nav['url'] }}" class="statisty-navbar-link @if(($activePage ?? '') === $nav['key']) active @endif">
@@ -273,7 +347,13 @@
                     <button type="button" class="statisty-navbar-theme-btn" data-theme="teal" aria-label="Sarcelle"></button>
                     <button type="button" class="statisty-navbar-theme-btn" data-theme="amber" aria-label="Ambre"></button>
                     <button type="button" class="statisty-navbar-theme-btn" data-theme="pink" aria-label="Rose"></button>
+                    <button type="button" class="statisty-navbar-theme-btn" data-theme="blue" aria-label="Bleu"></button>
+                    <button type="button" class="statisty-navbar-theme-btn" data-theme="green" aria-label="Vert"></button>
                 </div>
+                <button id="statistyDarkModeToggle" type="button" class="statisty-navbar-theme-toggle" aria-label="Mode sombre">
+                    <span class="statisty-icon-sun">☀</span>
+                    <span class="statisty-icon-moon">🌙</span>
+                </button>
                 <button id="statistySidebarToggle" aria-label="Toggle Menu" class="statisty-navbar-menu-toggle">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -289,8 +369,7 @@
         <!-- Sidebar -->
         <aside class="statisty-sidebar" id="statistySidebar">
             <div class="statisty-sidebar-brand" style="display:flex; align-items:center; gap:10px; padding: 24px 24px 12px 24px;">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ff2d20" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0px 2px 4px rgba(255,45,32,0.3));"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-5 5"/></svg>
-                <span style="font-size:22px; font-weight:800; color:var(--text-primary); letter-spacing:-0.5px;">Statisty</span>
+                <img src="{{ asset('vendor/statisty/logo.png') }}" alt="Statisty logo" class="statisty-sidebar-logo" />
             </div>
 
             <nav class="statisty-sidebar-nav">
@@ -313,9 +392,8 @@
                 @endif
             </nav>
 
-            <div class="statisty-sidebar-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-light); margin-top: auto;">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap: 12px;">
-                    <img src="{{ asset('vendor/statisty/mascotte.png') }}" alt="Mascotte" style="height:32px; width:auto; display:block;" />
+            <div class="statisty-sidebar-footer">
+                <div class="statisty-sidebar-footer-inner">
                     <span class="statisty-version-badge">v{{ $version ?? '1.0.0' }}</span>
                 </div>
             </div>
@@ -334,7 +412,9 @@
             const toggleBtn = document.getElementById('statistySidebarToggle');
             const sidebar   = document.getElementById('statistySidebar');
             const themeButtons = document.querySelectorAll('.statisty-navbar-theme-btn');
+            const darkModeToggle = document.getElementById('statistyDarkModeToggle');
             const savedTheme = localStorage.getItem('statisty-theme') || 'red';
+            const savedDarkMode = localStorage.getItem('statisty-dark-mode') === 'true';
 
             if (toggleBtn && sidebar) {
                 toggleBtn.addEventListener('click', function () {
@@ -351,14 +431,31 @@
                 });
             }
 
+            function applyDarkMode(enabled) {
+                document.body.classList.toggle('dark-mode', enabled);
+                localStorage.setItem('statisty-dark-mode', enabled);
+                if (darkModeToggle) {
+                    darkModeToggle.classList.toggle('active', enabled);
+                }
+            }
+
             themeButtons.forEach(function (button) {
                 button.addEventListener('click', function () {
                     applyTheme(button.dataset.theme);
                 });
             });
 
+            if (darkModeToggle) {
+                darkModeToggle.addEventListener('click', function () {
+                    applyDarkMode(!document.body.classList.contains('dark-mode'));
+                });
+            }
+
             if (savedTheme) {
                 applyTheme(savedTheme);
+            }
+            if (savedDarkMode) {
+                applyDarkMode(savedDarkMode);
             }
         });
     </script>

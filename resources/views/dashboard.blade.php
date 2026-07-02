@@ -200,21 +200,44 @@
             }
 
             function tryRenderHeatmap() {
-                if (typeof window.Statisty === 'undefined' || typeof window.Statisty.waitForHighcharts !== 'function') {
+                if (typeof window.Statisty === 'undefined') {
                     heatmapContainer.style.display = 'none';
                     heatmapEmptyMessage.style.display = 'block';
                     return;
                 }
 
-                window.Statisty.waitForHighcharts(function (err) {
-                    if (err) {
-                        heatmapContainer.style.display = 'none';
-                        heatmapEmptyMessage.style.display = 'block';
-                        return;
-                    }
+                function failHeatmap() {
+                    heatmapContainer.style.display = 'none';
+                    heatmapEmptyMessage.style.display = 'block';
+                }
 
-                    renderHeatmap();
-                });
+                if (typeof window.Statisty.waitForHeatmap === 'function') {
+                    window.Statisty.waitForHeatmap(function (err) {
+                        if (err) {
+                            console.error('[Statisty] Heatmap module unavailable:', err);
+                            failHeatmap();
+                            return;
+                        }
+
+                        renderHeatmap();
+                    });
+                    return;
+                }
+
+                if (typeof window.Statisty.waitForHighcharts === 'function') {
+                    window.Statisty.waitForHighcharts(function (err) {
+                        if (err) {
+                            console.error('[Statisty] Highcharts unavailable:', err);
+                            failHeatmap();
+                            return;
+                        }
+
+                        renderHeatmap();
+                    });
+                    return;
+                }
+
+                failHeatmap();
             }
 
             tryRenderHeatmap();
