@@ -19,6 +19,7 @@ final class ChartQueryContextBuilder
         $mainTable = (new $modelClass())->getTable();
         $isRelation = $valueField !== null && str_contains($valueField, '.');
         $relationField = null;
+        $relationValueKey = null;
         $valueFieldToAggregate = $valueField !== null && ! $isRelation ? "{$mainTable}.{$valueField}" : null;
 
         if ($isRelation) {
@@ -27,6 +28,7 @@ final class ChartQueryContextBuilder
             $relation = $instance->{$relationName}();
             $relatedModel = $relation->getRelated();
             $relatedTable = $relatedModel->getTable();
+            $relationValueKey = '__statisty_relation_value';
 
             if ($relation instanceof HasMany || $relation instanceof HasOne) {
                 $foreignKey = $relation->getForeignKeyName();
@@ -40,6 +42,7 @@ final class ChartQueryContextBuilder
                 throw new InvalidArgumentException('Unsupported relation type for charts.');
             }
 
+            $query->select("{$mainTable}.*", "{$relatedTable}.{$relationField} as {$relationValueKey}");
             $valueFieldToAggregate = "{$relatedTable}.{$relationField}";
         }
 
@@ -48,6 +51,7 @@ final class ChartQueryContextBuilder
             'dateColumnPrefixed' => "{$mainTable}.{$dateColumn}",
             'isRelation' => $isRelation,
             'relationField' => $relationField,
+            'relationValueKey' => $relationValueKey,
             'valueFieldToAggregate' => $valueFieldToAggregate,
         ];
     }

@@ -22,8 +22,8 @@ final class ChartDataGenerator
         $context = $contextBuilder->buildContext($modelClass, $valueField, $dateColumn);
         $contextBuilder->applyDateFilters(
             $context['query'],
-            $options['from'] ?? null,
-            $options['to'] ?? null,
+            $options['from'] ?? $options['date_from'] ?? null,
+            $options['to'] ?? $options['date_to'] ?? null,
             $context['dateColumnPrefixed'],
         );
 
@@ -33,7 +33,7 @@ final class ChartDataGenerator
             $dateColumn,
             $context['dateColumnPrefixed'],
             $context['isRelation'],
-            $context['relationField'],
+            $context['relationValueKey'] ?? null,
             $context['valueFieldToAggregate'],
             $options,
             $period,

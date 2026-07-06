@@ -129,4 +129,16 @@ return [
     'validators' => [
         'enabled' => env('STATISTY_VALIDATORS', true),
     ],
+
+    /*
+     * Détermine quelle source de vues a la priorité lorsque des vues package
+     * ont été publiées dans l'application (resources/views/vendor/statisty).
+     * - false (par défaut) : utiliser les vues fournies par le package dans
+     *   `vendor/statisty` / `resources/views` du package (PRÉFÉRÉ pour les
+     *   environnements de test ou CI où l'on ne veut pas que les copies
+     *   publiées remplacent automatiquement les vues du package).
+     * - true : préférer les vues publiées dans l'application (comportement
+     *   Laravel par défaut quand on publie des vues).
+     */
+    'prefer_published_views' => env('STATISTY_PREFER_PUBLISHED_VIEWS', false),
 ];

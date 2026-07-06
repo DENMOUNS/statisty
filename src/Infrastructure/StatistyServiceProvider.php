@@ -33,7 +33,7 @@ final class StatistyServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        if (! class_exists('\Illuminate\Foundation\Application')) {
+        if (! class_exists('\\Illuminate\\Foundation\\Application')) {
             return;
         }
 
@@ -68,7 +68,7 @@ final class StatistyServiceProvider extends ServiceProvider
                     $profiler,
                     $app->make(ProfilingCache::class),
                 );
-            } catch (\Throwable) {
+                } catch (\Throwable) {
                 return $profiler;
             }
         });
@@ -87,12 +87,12 @@ final class StatistyServiceProvider extends ServiceProvider
             });
         }
 
-        if (class_exists('\Illuminate\Routing\Router')) {
+        if (class_exists('\\Illuminate\\Routing\\Router')) {
             try {
                 $router = $this->app->make(\Illuminate\Routing\Router::class);
                 $router->aliasMiddleware('statisty.auth', EnsureStatistyAuthorized::class);
                 $router->aliasMiddleware('statisty.compress', CompressResponse::class);
-            } catch (\Throwable) {
+                } catch (\Throwable) {
             }
         }
 
@@ -111,7 +111,36 @@ final class StatistyServiceProvider extends ServiceProvider
             __DIR__ . '/../../resources/mascotte.png'       => public_path('vendor/statisty/mascotte.png'),
         ], 'statisty-assets');
 
-        $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'statisty');
+        // Copie locale de Highcharts, servie en dernier recours si les CDN
+        // sont bloqués par le réseau/proxy (cf. layout.blade.php).
+        // Placez les fichiers Highcharts dans resources/vendor/highcharts/
+        // avant de publier (voir README : section "Highcharts hors-ligne").
+        if (is_dir(__DIR__ . '/../../resources/vendor/highcharts')) {
+            $this->publishes([
+                __DIR__ . '/../../resources/vendor/highcharts' => public_path('vendor/statisty/highcharts'),
+            ], 'statisty-assets');
+        }
+
+        $packageViews = __DIR__ . '/../../resources/views';
+        $this->loadViewsFrom($packageViews, 'statisty');
+
+        // Controler la priorité des vues: par défaut, préférer les vues du package
+        // plutôt que les copies publiées dans resources/views/vendor/statisty.
+        $publishedViews = resource_path('views/vendor/statisty');
+        try {
+            /** @var \Illuminate\Contracts\View\Factory|\Illuminate\View\Factory $viewFactory */
+            $viewFactory = $this->app['view'];
+            if (config('statisty.prefer_published_views', false)) {
+                if (is_dir($publishedViews)) {
+                    $viewFactory->prependNamespace('statisty', $publishedViews);
+                }
+            } else {
+                // S'assurer que le chemin du package est prioritaire
+                $viewFactory->prependNamespace('statisty', $packageViews);
+            }
+        } catch (\Throwable) {
+            // ignore si view factory non disponible
+        }
 
         if ($this->app->runningInConsole()) {
             $this->commands([

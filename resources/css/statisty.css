@@ -591,13 +591,13 @@ body.dark-mode .statisty-icon-moon {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 24px;
-    padding-left: 8px;
+    margin-bottom: 10px;
+    padding: 16px 12px 6px;
 }
 
 .statisty-sidebar-logo {
-    width: 36px;
-    height: 36px;
+    width: 54px;
+    height: 54px;
     border-radius: 9999px;
     object-fit: cover;
     display: block;
@@ -689,8 +689,8 @@ body.dark-mode .statisty-icon-moon {
     text-transform: uppercase;
     letter-spacing: 1px;
     color: rgba(255, 255, 255, 0.55);
-    margin-bottom: 6px;
-    padding-left: 8px;
+    margin-bottom: 4px;
+    padding-left: 4px;
 }
 
 .statisty-nav-link {

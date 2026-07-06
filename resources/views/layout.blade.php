@@ -26,14 +26,11 @@
     <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
 
-    <!-- Highcharts + modules -->
+    <!-- Highcharts + modules (CDN only) -->
     <script>
         (function () {
             var cdnBases = [
-                'https://code.highcharts.com/11.2.2',
-                'https://cdn.jsdelivr.net/npm/highcharts@11.2.2',
-                'https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.2',
-                'https://unpkg.com/highcharts@11.2.2',
+                'https://cdnjs.cloudflare.com/ajax/libs/highcharts/11.2.0',
             ];
 
             function loadScript(src) {
@@ -70,16 +67,19 @@
                 return tryNext();
             }
 
-            function loadScriptsParallel(paths) {
-                return Promise.all(paths.map(loadScriptWithFallback));
-            }
-
             window.Statisty = window.Statisty || {};
             window.Statisty.highchartsReady = loadScriptWithFallback('highcharts.js')
                 .then(function () { return true; })
                 .catch(function (error) {
-                    console.error('[Statisty] Highcharts core failed to load:', error);
-                    return false;
+                    console.error('[Statisty] Highcharts core failed to load from CDNs:', error,
+                        'Trying local fallback: public/vendor/statisty/highcharts/highcharts.js');
+
+                    // Essayer un fallback local si l'administrateur a publié les fichiers
+                    var localCore = '{{ asset("vendor/statisty/highcharts/highcharts.js") }}';
+                    return loadScript(localCore).then(function () { return true; }).catch(function (e) {
+                        console.error('[Statisty] Local Highcharts fallback failed:', e);
+                        return false;
+                    });
                 });
 
             window.Statisty.heatmapReady = window.Statisty.highchartsReady.then(function (success) {
@@ -89,8 +89,14 @@
                 return loadScriptWithFallback('modules/heatmap.js')
                     .then(function () { return true; })
                     .catch(function (error) {
-                        console.warn('[Statisty] Highcharts heatmap module failed to load:', error);
-                        return false;
+                        console.warn('[Statisty] Highcharts heatmap module failed to load from CDNs:', error,
+                            'Trying local fallback: public/vendor/statisty/highcharts/modules/heatmap.js');
+
+                        var localHeatmap = '{{ asset("vendor/statisty/highcharts/modules/heatmap.js") }}';
+                        return loadScript(localHeatmap).then(function () { return true; }).catch(function (e) {
+                            console.warn('[Statisty] Local heatmap fallback failed:', e);
+                            return false;
+                        });
                     });
             });
 
@@ -106,7 +112,7 @@
                 ]).then(function (results) {
                     var failed = results.filter(function (result) { return result.status === 'rejected'; });
                     if (failed.length) {
-                        console.warn('[Statisty] Some Highcharts optional scripts failed to load:', failed.map(function (result) { return result.reason; }));
+                        console.warn('[Statisty] Some Highcharts optional scripts failed to load from CDNs:', failed.map(function (result) { return result.reason; }));
                     }
                     return true;
                 });
@@ -368,7 +374,7 @@
     <div class="statisty-layout">
         <!-- Sidebar -->
         <aside class="statisty-sidebar" id="statistySidebar">
-            <div class="statisty-sidebar-brand" style="display:flex; align-items:center; gap:10px; padding: 24px 24px 12px 24px;">
+            <div class="statisty-sidebar-brand">
                 <img src="{{ asset('vendor/statisty/logo.png') }}" alt="Statisty logo" class="statisty-sidebar-logo" />
             </div>
 

@@ -1,5 +1,4 @@
-﻿<?php
-
+<?php
 declare(strict_types=1);
 
 namespace Statisty\Charts;
@@ -23,7 +22,7 @@ final class ChartDataProcessor
         string $dateColumn,
         string $dateColumnPrefixed,
         bool $isRelation,
-        ?string $relationField,
+        ?string $relationValueKey,
         ?string $valueFieldToAggregate,
         array $options,
         string $period,
@@ -33,7 +32,7 @@ final class ChartDataProcessor
         }
 
         if ($this->shouldUseRawRows($options)) {
-            return $this->collectRawRows($query, $dateColumn, $valueField, $isRelation, $relationField);
+            return $this->collectRawRows($query, $dateColumn, $valueField, $isRelation, $relationValueKey);
         }
 
         $numericSample = $this->detectNumericSample($query, $valueFieldToAggregate);
@@ -41,7 +40,7 @@ final class ChartDataProcessor
             return $this->aggregator->aggregateSumByPeriod($query, $dateColumnPrefixed, $valueFieldToAggregate, $period);
         }
 
-        return $this->collectCategoryCounts($query, $dateColumn, $valueField, $isRelation, $relationField);
+        return $this->collectCategoryCounts($query, $dateColumn, $valueField, $isRelation, $relationValueKey);
     }
 
     public function shouldUseRawRows(array $options): bool
@@ -73,10 +72,10 @@ final class ChartDataProcessor
         }
     }
 
-    public function collectRawRows(EloquentBuilder $query, string $dateColumn, string $valueField, bool $isRelation, ?string $relationField): Collection
+    public function collectRawRows(EloquentBuilder $query, string $dateColumn, string $valueField, bool $isRelation, ?string $relationValueKey): Collection
     {
         $dateKey = $dateColumn;
-        $valueKey = $isRelation ? $relationField : $valueField;
+        $valueKey = $isRelation ? $relationValueKey : $valueField;
         $rows = new Collection();
 
         $query->chunk(1000, function ($items) use ($rows, $dateKey, $valueKey): void {
@@ -91,9 +90,9 @@ final class ChartDataProcessor
         return $rows;
     }
 
-    public function collectCategoryCounts(EloquentBuilder $query, string $dateColumn, string $valueField, bool $isRelation, ?string $relationField): array
+    public function collectCategoryCounts(EloquentBuilder $query, string $dateColumn, string $valueField, bool $isRelation, ?string $relationValueKey): array
     {
-        $valueKey = $isRelation ? $relationField : $valueField;
+        $valueKey = $isRelation ? $relationValueKey : $valueField;
         $counts = [];
 
         $query->chunk(1000, function ($items) use (&$counts, $valueKey): void {

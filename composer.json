@@ -45,7 +45,13 @@
     "scripts": {
         "test": "phpunit",
         "phpstan": "phpstan analyse",
-        "phpcs": "phpcs --standard=phpcs.xml.dist src tests"
+        "phpcs": "phpcs --standard=phpcs.xml.dist src tests",
+        "post-install-cmd": [
+            "php bin/download-highcharts.php"
+        ],
+        "post-update-cmd": [
+            "php bin/download-highcharts.php"
+        ]
     },
     "config": {
         "sort-packages": true

@@ -16,6 +16,9 @@ final class TableRowResource extends JsonResource
     public function toArray($request): array
     {
         $modelClass = $request->route('model') ?? $request->query('statisty_model') ?? $request->get('statisty_model');
+        if ($modelClass === null && $this->resource instanceof Model) {
+            $modelClass = get_class($this->resource);
+        }
 
         $hidden = $this->resolveHiddenColumns($modelClass);
 
